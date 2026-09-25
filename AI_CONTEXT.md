@@ -31,7 +31,9 @@ A 20% validation split on `source1_entity_id` is strictly enforced and frozen to
 - Submission generation layer and validator implemented to guarantee 100% portal compliance.
 
 # Active Experiments
-- **EXP-002B**: Optimized Partitioned TF-IDF Blocking. Redesigned to strictly enforce country partitions, disk-caching of vectorizers/sparse matrices, and multi-threaded batch inference for scalability. Testing on a 10k query sample.
+- **EXP-002B**: Optimized Partitioned TF-IDF Blocking.
+    - **Stage 1 (Completed)**: Out-of-core memory-safe pipeline created. Evaluated on 1k queries. D2 (`business_name` + `business_address`, char ngrams 3,5) achieved a remarkable **96.29% Recall@200**.
+    - **Stage 2 (Running)**: Actively running Variant D2 against the entire frozen validation split (35k queries) to generate `validation_candidate_pairs.tsv` and measure full-scale metrics.
 
 # Experiment Results
 - **EXP-001:** F0.5 = 0.19372. Baseline confirms need for fuzzy matching and blocking.

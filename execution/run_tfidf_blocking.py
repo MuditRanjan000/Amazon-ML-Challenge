@@ -23,13 +23,9 @@ def run_experiment():
     
     train_ids, val_ids = create_validation_split(gt)
     
-    # 1k Validation Sample for Fast Signal Experiment
-    import random
-    random.seed(42)
-    val_ids_sample = set(random.sample(list(val_ids), min(1000, len(val_ids))))
-    
-    val_s1, _ = apply_validation_split(s1_full, 'entity_id', val_ids_sample, train_ids)
-    val_gt, _ = apply_validation_split(gt, 'source1_entity_id', val_ids_sample, train_ids)
+    # Stage 2: Full Validation Set
+    _, val_s1 = apply_validation_split(s1_full, 'entity_id', train_ids, val_ids)
+    _, val_gt = apply_validation_split(gt, 'source1_entity_id', train_ids, val_ids)
     
     s2 = s2_full
     s3 = s3_full
@@ -38,12 +34,8 @@ def run_experiment():
     log_path = r"c:\Users\dell\Desktop\Projects\Amazon ML Challenge\experiments\results\blocking_results.csv"
     
     variants = [
-        # D1: country + name character ngrams
-        {'name': 'D1', 'fields': ['business_name'], 'ngrams': (3,5)},
         # D2: country + name + address character ngrams
-        {'name': 'D2', 'fields': ['business_name', 'business_address'], 'ngrams': (3,5)},
-        # D3: country + combined text with tuned ngram range
-        {'name': 'D3', 'fields': ['business_name', 'business_address', 'city', 'state', 'zip_code'], 'ngrams': (3,6)},
+        {'name': 'D2', 'fields': ['business_name', 'business_address'], 'ngrams': (3,5)}
     ]
     
     for v in variants:
@@ -82,9 +74,15 @@ def run_experiment():
             'avg_candidates': results.get('avg_cand_at_200', 0),
             'runtime': total_time,
             'memory': 'Optimized',
-            'notes': "1000 query signal benchmark"
+            'notes': "Full validation split benchmark"
         }])
         log_df.to_csv(log_path, mode='a', header=False, index=False)
+        
+        # Save candidates
+        output_dir = r"c:\Users\dell\Desktop\Projects\Amazon ML Challenge\artifacts\blocking"
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        candidates.to_csv(os.path.join(output_dir, "validation_candidate_pairs.tsv"), sep="\t", index=False)
             
         print(f"Total Time: {total_time:.2f}s | K=200 Recall: {results.get('recall_at_200', 0):.4f}")
         
