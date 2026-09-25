@@ -65,7 +65,34 @@ Library: `entity_resolution.blocking` provides `TfidfBlocker` (fit/query, forwar
 
 Word-level `max_df` is nearly free (common words like road/street/pvt carry no identity), unlike char n-gram pruning. **Decide the final max_df on the full val split before freezing.**
 
+## Hybrid blocking (2026-09-26, 20k val S1 = `--sample 20000`, full 10.3M index, laptop)
+Baseline to beat (Mudit, `feature/mudit-submission`): char_wb (3,5) name+address, R@200 = 96.29% on **1k** val queries.
+A 1k sample is too small to rank configs: over 500 random 1k subsets, one fixed config spans R@200 96.6–97.8% (95% band, sd 0.31pp).
+Always compare on the same `--sample 20000` (deterministic: `random.Random(42).sample(sorted(val_ids))`).
+
+| Exp | Config | R | ceiling F0.5 | avg cands/S1 |
+|---|---|---|---|---|
+| BLK-013 | word name+address, max_df 0.02, K=100 | 0.9647 | 0.9871 | 100 |
+| BLK-013 | same, K=200 | 0.9721 | 0.9900 | 200 |
+| BLK-014 | ∪ name_key char3 (xlit) — fwd@50 ∪ nk@50 | 0.9706 | 0.9892 | 95 |
+| **BLK-016** | **fwd@100 ∪ nk@25 (hybrid v1 default)** | **0.9737** | **0.9902** | **120** |
+| BLK-014 | fwd@100 ∪ nk@50 | 0.9755 | 0.9909 | 144 |
+| BLK-014 | fwd@150 ∪ nk@50 | 0.9780 | 0.9918 | 193 |
+| BLK-014 | fwd@200 ∪ nk@50 | 0.9799 | 0.9925 | 242 |
+
+Channel speeds: word name+address 338–350 q/s; name_key xlit 86 q/s; name_key skeleton 176 q/s.
+The final K pair depends on Ashank's pair budget (G4); the knee is roughly 120–145 candidates/S1.
+
+**Rejected (measured, did not earn their place):**
+- Score-ratio / absolute-score adaptive cutoffs on the word channel: no better than fixed K (ratio≥0.3: R 0.9695 @147 vs fixed K=150: 0.9691 @150).
+- Address canonicalization (state names↔codes, ordinals, digit/letter split, leading zeros), BLK-015: +0.1pp alone, **+0.00pp in the union** with name_key, and 130 s extra preprocessing.
+- Vowel-skeleton name_key: 2× faster but −0.05pp in every union. Kept as `--name-key-skeleton` for when runtime binds.
+- Reverse channel: not run. Its premise (6+-match entities crowded out) is not in the data: bucket 6+ recall 0.971 ≈ bucket 2–5 recall 0.973. It would cost about 2 h per run on the laptop.
+
 ## Edge cases & learnings
+- **Miss taxonomy of word name+address (BLK-013, 1,922 missed of 68,941 true pairs):** India misses 4.9% of its pairs vs US 1.4%. ~40% cross-script Indic names (Devanagari/Kannada/Tamil… vs Latin), ~21% empty candidate address with a typo'd name (`Devel0pers`), domain-style names (`kirkaerospace.com`), and names that are unrelated where only a noisy address links the pair. No missed pair crosses countries.
+- `anyascii` drops the Indic inherent vowel (`सुपर` → `supr`), so word tokens don't align across scripts; char n-grams do.
+- Arrow string regexes are RE2: no lookbehind or backreferences. Use Python `re` on object dtype for those.
 - **GT structure (train):** 7,638,365 true pairs. **Every S2/S3 ID belongs to at most one S1** (many-to-one), so reverse retrieval and a one-S1-per-record constraint in the matcher are both valid. 74% of S2+S3 records match some S1; 26% are distractors. Matches per S1: 0 → 123,247 | 1 → 119,157 | 2–5 → 1.71M | 6–11 → 252k.
 - **The address is the biggest recall lever.** Name-only retrieval tops out around R@200 0.78; adding the address reaches R@50 0.96.
 - **Char trigrams on names are a trap at this scale:** each India query touches ~2.1M of 4.1M index rows. `max_df` pruning of char n-grams destroys recall (0.02 → R@200 −4 pts; 0.005 → −22 pts). Short names need their common trigrams.
