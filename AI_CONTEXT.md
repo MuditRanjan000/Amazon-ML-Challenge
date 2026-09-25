@@ -62,3 +62,5 @@ A 20% validation split on `source1_entity_id` is strictly enforced and frozen to
 # Important Decisions
 - Team Playbook adopted as the core execution strategy.
 - Repositiory migrated to a strict, modular framework under `src/entity_resolution`.
+- AGENTS.md rule 5 (push to main + tradebot redeploy) replaced with branch + PR policy; CLAUDE.md/GEMINI.md mirror AGENTS.md via `execution/sync_agent_docs.py` (PR from `feature/aayush-agent-docs`).
+- Blocking contract + oracle-ceiling F0.5 metric + hand-off gates proposed in `directives/blocking.md` (pending Ashank/Mudit sign-off). Known OOM risk in `tfidf_blocking.py` dense chunking documented there.

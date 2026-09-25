@@ -12,6 +12,11 @@ models/
 scratch_*.py
 test_*.py
 
+# Personal agent layers (per-operator, never shared)
+CLAUDE.local.md
+GEMINI.local.md
+.claude/settings.local.json
+
 # Credentials and Configs
 .env
 credentials.json
