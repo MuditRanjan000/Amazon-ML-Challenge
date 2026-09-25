@@ -23,8 +23,9 @@ Amazon ML Challenge 2026 - Business Entity Resolution. Goal is to map Source 2 a
 - **Ashank:** Matching model specialist, feature engineering, ML models, threshold optimization, model-side error analysis.
 
 # Completed Experiments
-- EXP-001: Baseline Exact Match
+- EXP-001: Baseline Exact Match (Failed/Unusable, capped at ~32% recall).
 - System validation framework established.
+- Submission generation layer and validator implemented to guarantee 100% portal compliance.
 
 # Experiment Results
 - **EXP-001:** F0.5 = 0.19372. Baseline confirms need for fuzzy matching and blocking.
@@ -41,6 +42,15 @@ Amazon ML Challenge 2026 - Business Entity Resolution. Goal is to map Source 2 a
 
 # Submission History
 - None yet.
+
+# Final Pipeline Architecture
+1. Data Loading
+2. Preprocessing
+3. Blocking (Candidate Generation)
+4. Feature Generation
+5. Matching Model
+6. Decision Layer
+7. Submission Generator -> `output/matching_results.tsv`
 
 # Important Decisions
 - Team Playbook adopted as the core execution strategy.
