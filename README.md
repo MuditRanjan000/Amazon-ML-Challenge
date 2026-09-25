@@ -21,6 +21,21 @@ Source 1 is the deduplicated reference source. The goal is to find all matching 
 2. Install dependencies: `pip install -r requirements.txt`.
 3. Run the validation split creation to setup the local environment.
 
+## Generating a Submission
+To generate a submission from your final predicted matches:
+```python
+from src.entity_resolution.submission.generator import SubmissionGenerator
+generator = SubmissionGenerator()
+generator.generate(test_s1_ids, predicted_matches_dict, "matching_results.tsv")
+```
+
+## Validating a Submission
+Always validate before submitting to the portal:
+```bash
+python scripts/validate_submission.py --submission output/matching_results.tsv --test-dir 6ab10eb3b23ba_student_resource/student_resource/dataset/test
+```
+This ensures no duplicates, correct TSV formatting, and strict valid ID checking.
+
 ## Experiment Workflow
 1. Check `AI_CONTEXT.md` and the playbook.
 2. Define a hypothesis in `experiments/results/experiment_registry.csv`.
