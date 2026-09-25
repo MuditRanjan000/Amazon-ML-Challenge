@@ -1,0 +1,6 @@
+Experiment_ID,Date,Git_commit,Hypothesis,Code_version,Dataset_version,Configuration,Blocking_method,Features_used,Model_used,Threshold,Candidate_recall,Precision,Recall,F0.5,Runtime,Memory_usage,Observations,Final_conclusion
+EXP-001,2026-09-25,,Baseline exact match to establish floor,v1,train_v1,none,exact_name_country,none,none,1.0,N/A,N/A,N/A,0.19372,2min,Low,Exact match is inadequate due to noise,Need fuzzy blocking
+EXP-002,2026-09-25,,TF-IDF Character N-Grams will improve candidate recall,v1,train_v1,none,tfidf_global,none,none,1.0,N/A,N/A,N/A,N/A,Aborted,High,Global TF-IDF without partitions caused OOM and extremely slow execution,Aborted due to inefficient global retrieval
+EXP-002B,2026-09-25,,Partitioning by country and saving index cache will massively improve TFIDF recall retrieval efficiency,v2,train_v1,none,tfidf_partitioned,none,none,1.0,Aborted,N/A,N/A,N/A,Aborted,Optimized,Benchmark scope too large,Aborted
+EXP-002B-small,2026-09-25,,1000 query signal benchmark for fast iteration,v2,train_v1,none,tfidf_partitioned,none,none,1.0,Pending,N/A,N/A,N/A,Pending,Optimized,Pending,Pending
+EXP-002B-stage2,2026-09-26,,Full validation benchmark for D2 blocking,v3,train_v1,none,tfidf_partitioned,business_name+business_address,none,1.0,Pending,N/A,N/A,N/A,Pending,Optimized,Pending,Pending

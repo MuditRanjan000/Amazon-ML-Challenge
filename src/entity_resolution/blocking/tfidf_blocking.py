@@ -103,15 +103,16 @@ class TfidfBlocker(BaseBlocker):
             # Transform queries
             q_mat = vec.transform(grp['combined_text'])
             
-            # Batch queries (Chunks of 500)
-            chunk_size = 500
+            # Dynamic chunk size to prevent OOM
+            # If c_mat has 5M rows, chunk_size = 2. Keeps dense array ~80MB per chunk.
+            chunk_size = max(1, 10_000_000 // c_mat.shape[0])
             chunks = []
             for i in range(0, q_mat.shape[0], chunk_size):
                 end = min(i + chunk_size, q_mat.shape[0])
                 chunks.append((q_mat[i:end], grp['entity_id'].iloc[i:end].values))
                 
-            # Safely parallelize because partitioned matrices are small
-            chunk_results = Parallel(n_jobs=-1, backend='threading')(
+            # Safely parallelize with controlled max workers
+            chunk_results = Parallel(n_jobs=4, backend='threading')(
                 delayed(self._process_chunk)(q, c_mat, c_ids, ids, k) for q, ids in chunks
             )
             

@@ -11,11 +11,11 @@ To ensure perfectly comparable metrics across models (TF-IDF, embeddings, logica
 - **Method**: The split was strictly executed on `source1_entity_id` values to completely prevent data leakage between Train and Validation sets.
 
 ## Frozen Artifacts
-The specific sets of Source 1 entity IDs have been serialized and frozen to disk.
-- **Train IDs**: `output/validation_split/train_ids.csv`
-- **Validation IDs**: `output/validation_split/val_ids.csv`
+The specific sets of Source 1 entity IDs have been serialized and frozen to disk. These files are frozen experiment-control artifacts and must not change, ensuring all teammates have identical validation splits when checking out the repository.
+- **Train IDs**: `artifacts/validation_split/train_ids.csv`
+- **Validation IDs**: `artifacts/validation_split/val_ids.csv`
 
 ## Usage Policy
 All subsequent blocking and matching experiments MUST use this frozen split by leveraging the `create_validation_split` pipeline, which will automatically load these exact artifacts.
 
-A strict JSON manifest representing these exact files and their SHA-256 checksums is located at `experiments/results/validation_split_manifest.json`.
+A strict JSON manifest representing these exact files and their SHA-256 checksums is located at `artifacts/validation_split/manifest.json`.

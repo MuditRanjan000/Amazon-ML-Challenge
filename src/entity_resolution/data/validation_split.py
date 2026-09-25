@@ -7,8 +7,7 @@ def create_validation_split(ground_truth_df: pd.DataFrame, test_size=0.2, random
     """
     Split the dataset based on Source 1 entity IDs ensuring no leakage.
     Returns (train_s1_ids, val_s1_ids) as sets.
-    """
-    out_dir = "output/validation_split"
+    out_dir = "artifacts/validation_split"
     os.makedirs(out_dir, exist_ok=True)
     
     train_path = os.path.join(out_dir, "train_ids.csv")
