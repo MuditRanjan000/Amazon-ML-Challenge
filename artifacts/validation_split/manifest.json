@@ -1,10 +1,10 @@
 {
-    "split_creation_date": "2026-09-25T22:44:31.161213",
+    "split_creation_date": "2026-09-25T23:12:32.064531",
     "random_seed": 42,
     "train_source1_count": 1765456,
     "validation_source1_count": 441365,
-    "train_id_file_path": "output/validation_split\\train_ids.csv",
-    "validation_id_file_path": "output/validation_split\\val_ids.csv",
+    "train_id_file_path": "artifacts/validation_split/train_ids.csv",
+    "validation_id_file_path": "artifacts/validation_split/val_ids.csv",
     "train_id_file_sha256": "906bababcba3dbe9377d8d76b928f198268432ecaed96312a1634b2e2f7cd59b",
     "validation_id_file_sha256": "6530bd667e1f2ea2ab11cd78248077bcaf0c914500d1845dc6e004a0b84f6f8f"
 }

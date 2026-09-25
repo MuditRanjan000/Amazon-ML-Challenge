@@ -22,7 +22,7 @@ Amazon ML Challenge 2026 - Business Entity Resolution. Goal is to map Source 2 a
 - **Aayush:** Candidate generation / blocking specialist, retrieval strategies, candidate recall optimization.
 - **Ashank:** Matching model specialist, feature engineering, ML models, threshold optimization, model-side error analysis.
 # Frozen Validation Split
-A 20% validation split on `source1_entity_id` is strictly enforced and frozen to disk. All experiments must use `output/validation_split/val_ids.csv` to ensure comparability. Details are logged in `docs/validation_manifest.md`.
+A 20% validation split on `source1_entity_id` is strictly enforced and frozen to disk. All experiments must use `artifacts/validation_split/val_ids.csv` to ensure comparability. These files are frozen experiment-control artifacts and must not change, ensuring all teammates evaluate against identical data. Details are logged in `docs/validation_manifest.md`.
 
 # Completed Experiments
 - EXP-001: Baseline Exact Match (Failed/Unusable, capped at ~32% recall).

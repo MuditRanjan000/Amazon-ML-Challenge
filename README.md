@@ -7,6 +7,7 @@ Determine which records across three independent data sources refer to the same 
 Source 1 is the deduplicated reference source. The goal is to find all matching records from Source 2 and Source 3 for each Source 1 entity. 
 
 ## Folder Structure
+- `artifacts/`: Contains frozen experiment-control artifacts (like `validation_split/`). These files must NOT change to ensure identical benchmarking across the team.
 - `data/`: Contains dataset descriptions (datasets ignored via .gitignore).
 - `docs/`: Methodology, playbooks, and reports.
 - `experiments/`: Experiment registry and results.

@@ -52,8 +52,12 @@ def run_experiment():
         blocker = TfidfBlocker(text_fields=v['fields'], ngram_range=v['ngrams'], cache_dir=f"output/tfidf_cache_exp002b_{v['name']}")
         
         start_time = time.time()
-        print("Building Index (Partitioned by Country)...")
-        blocker.build_index(s2, s3)
+        print("Checking for existing Index cache...")
+        if not os.path.exists(blocker.cache_dir) or len(os.listdir(blocker.cache_dir)) == 0:
+            print("Building Index (Partitioned by Country)...")
+            blocker.build_index(s2, s3)
+        else:
+            print("Index cache found. Skipping build.")
         index_time = time.time() - start_time
         print(f"Index built in {index_time:.2f}s")
         
