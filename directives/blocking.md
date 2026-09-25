@@ -43,7 +43,7 @@ Choose the **knee** of the ceiling-vs-pairs curve, not the maximum K.
 ## Scripts
 | Script | Status |
 |---|---|
-| `execution/run_blocking_eval.py` | **ready**: any method, direction and config on the frozen val split (`--sample N` for dev). Logs to `experiments/results/experiments.jsonl`; `--save` writes the candidates parquet. |
+| `execution/run_blocking_eval.py` | **ready**: any method, direction and config on the frozen val split (`--sample N` for dev). Hybrid: `--k 100 --name-key-k 25`. Logs to `experiments/results/experiments.jsonl`; `--save` writes the candidates parquet. |
 | `execution/profile_blocking.py` | to build: country agreement, field survival (GT structure already measured, see below) |
 | `execution/run_blocking.py` | to build: frozen config → train/val/test parquet + sidecar |
 | `execution/check_candidates.py` | to build: gates G1–G5 |
@@ -76,6 +76,7 @@ Always compare on the same `--sample 20000` (deterministic: `random.Random(42).s
 | BLK-013 | same, K=200 | 0.9721 | 0.9900 | 200 |
 | BLK-014 | ∪ name_key char3 (xlit) — fwd@50 ∪ nk@50 | 0.9706 | 0.9892 | 95 |
 | **BLK-016** | **fwd@100 ∪ nk@25 (hybrid v1 default)** | **0.9737** | **0.9902** | **120** |
+| BLK-017 | same as BLK-016 on **100k** val S1 (confirmation) | 0.9740 | 0.9906 | 120 |
 | BLK-014 | fwd@100 ∪ nk@50 | 0.9755 | 0.9909 | 144 |
 | BLK-014 | fwd@150 ∪ nk@50 | 0.9780 | 0.9918 | 193 |
 | BLK-014 | fwd@200 ∪ nk@50 | 0.9799 | 0.9925 | 242 |

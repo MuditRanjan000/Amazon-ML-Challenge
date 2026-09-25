@@ -51,3 +51,12 @@
   - Name+address word TF-IDF raises R@50 from 0.706 to 0.958 and the ceiling F0.5 from 0.829 to 0.985.
   - Sparse top-k is memory-bandwidth bound: no gain beyond about 4 threads.
   - Details in `directives/blocking.md`.
+
+## [2026-09-26] Hybrid blocking v1 beats the D2 baseline (Aayush, `experiment/aayush-blocking-hybrid`)
+- **Target (Mudit):** beat D2 = char_wb (3,5) name+address TF-IDF, R@200 96.29% (measured on 1,000 val queries, `feature/mudit-submission`).
+- **Result:** word TF-IDF name+address (max_df 0.02) top-100 ∪ new **name_key** channel top-25 → **R 0.9740, ceiling F0.5 0.9906, 120 candidates/S1** on 100k val S1 (BLK-017; 0.9739 on 20k, BLK-016). Beats 96.29% by about 1.1pp with 40% fewer candidates. Forward channel runs at about 340 q/s.
+- **name_key** (`blocking/keys.py`): anyascii (ISC) transliteration → normalize with legal suffixes stripped → drop web tokens and spaces → char 3-grams. It targets the measured misses: cross-script Indic names (~40%), typo'd names with an empty address (~21%), and domain-style names.
+- **Measured and rejected:** score-ratio/absolute adaptive cutoffs (no better than fixed K); address canonicalization (+0.00pp in the union); vowel skeleton (−0.05pp, kept as a speed flag). Reverse channel skipped: the 6+ bucket is not under-recalled.
+- **Method notes:** a 1k-query sample has a ±0.6pp 95% band on R@200, too noisy to rank configs; compare on `--sample 20000`. `run_blocking_eval.py`'s evaluator gives R@K identical to `origin/main`'s `BlockingEvaluator` on the same candidates (checked).
+- **Found on `feature/mudit-submission` (owner: Mudit):** `data/validation_split.py` has an unterminated docstring (SyntaxError on import). The committed split CSVs are stored with LF, so their SHA-256 matches the manifest only on Windows checkouts (autocrlf) and will fail on Linux/AWS. The committed `tfidf_blocking.py` still does dense `toarray()` and skips unseen countries (France). The report says "35,000 queries = full val", but val has 441,365 S1.
+- New dependency: `anyascii==0.3.3` (ISC).

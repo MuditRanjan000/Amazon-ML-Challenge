@@ -38,10 +38,14 @@ A 20% validation split on `source1_entity_id` is strictly enforced and frozen to
 - **EXP-002:** Aborted. Computing non-partitioned sparse-matrix dot products for 10.3M rows proved computationally non-viable for rapid iteration without an AWS cluster.
 
 # Current Best Pipeline
-- Exact string matching on normalized business names partitioned by country. (Baseline)
+- Exact string matching on normalized business names partitioned by country. (Baseline, matching)
+- **Best blocking (Aayush, BLK-017, 100k val):** word TF-IDF name+address top-100 ∪ name_key char-3gram top-25 → pair recall 0.9740, ceiling F0.5 0.9906, 120 candidates/S1 (vs D2 96.29% R@200 on 1k queries).
 
 # Known Issues
 - Baseline misses all typo, transliteration, and abbreviation variations, resulting in extremely poor recall.
+
+# Next Blocking Experiment
+- Get Ashank's pair budget → pick K on the recall-vs-candidates curve (directives/blocking.md) → chunked `run_blocking.py` writing train/val/test parquet + gates → full run (AWS).
 
 # Future Experiments
 - **Current Goal:** Establish a robust candidate generation (blocking) framework. We are starting with an exact normalized name baseline to measure the strict recall floor before testing token, character n-gram, and TF-IDF blocking strategies.
