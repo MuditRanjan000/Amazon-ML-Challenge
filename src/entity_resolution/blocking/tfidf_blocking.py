@@ -12,9 +12,9 @@ class TfidfBlocker(BaseBlocker):
         self.text_fields = text_fields
         self.ngram_range = ngram_range
         self.cache_dir = cache_dir
-        self.vectorizers = {} # country -> vectorizer
-        self.matrices = {} # country -> sparse matrix
-        self.candidate_ids = {} # country -> list of entity ids
+        self.vectorizers = {} # Not storing in memory globally
+        self.matrices = {} # Not storing in memory globally
+        self.candidate_ids = {} # Not storing in memory globally
         
         if not os.path.exists(self.cache_dir):
             os.makedirs(self.cache_dir)
@@ -46,33 +46,28 @@ class TfidfBlocker(BaseBlocker):
         for country, grp in candidates.groupby('country'):
             vec = TfidfVectorizer(analyzer='char_wb', ngram_range=self.ngram_range, min_df=2)
             mat = vec.fit_transform(grp['combined_text'])
-            self.vectorizers[country] = vec
-            self.matrices[country] = mat
-            self.candidate_ids[country] = grp['entity_id'].values
-            
-            # Cache the index
+            # We do NOT save to self.vectorizers/matrices to save RAM
+            # Only cache the index to disk
             joblib.dump(vec, os.path.join(self.cache_dir, f'vec_{country}.joblib'))
             joblib.dump(mat, os.path.join(self.cache_dir, f'mat_{country}.joblib'))
             joblib.dump(grp['entity_id'].values, os.path.join(self.cache_dir, f'ids_{country}.joblib'))
+            
+            del vec, mat
+            gc.collect()
             
         del candidates
         gc.collect()
 
     def load_index(self, countries):
-        """Load cached indexes to avoid recomputing."""
-        for country in countries:
-            try:
-                self.vectorizers[country] = joblib.load(os.path.join(self.cache_dir, f'vec_{country}.joblib'))
-                self.matrices[country] = joblib.load(os.path.join(self.cache_dir, f'mat_{country}.joblib'))
-                self.candidate_ids[country] = joblib.load(os.path.join(self.cache_dir, f'ids_{country}.joblib'))
-            except FileNotFoundError:
-                print(f"Warning: No cache found for country {country}")
+        """Not needed since we load lazily per country now."""
+        pass
 
     def _process_chunk(self, q_mat_chunk, c_mat, c_ids, s1_ids, k):
         results = []
         # TfidfVectorizer outputs L2 normalized matrices by default.
-        # Direct dot product computes exact cosine similarity without sklearn internal matrix copies
-        sim = q_mat_chunk.dot(c_mat.T).toarray()
+        # c_mat is CSR, q_mat_chunk.T is CSC. CSR * CSC avoids allocating massive new indices
+        # It converts q_mat_chunk.T to CSR (tiny memory because only 500 rows)
+        sim = c_mat.dot(q_mat_chunk.T).T.toarray()
         for row_idx in range(sim.shape[0]):
             row_sim = sim[row_idx]
             top_indices = np.argsort(row_sim)[-k:][::-1]
@@ -96,11 +91,14 @@ class TfidfBlocker(BaseBlocker):
         all_results = []
         
         for country, grp in s1.groupby('country'):
-            if country not in self.vectorizers:
+            vec_path = os.path.join(self.cache_dir, f'vec_{country}.joblib')
+            if not os.path.exists(vec_path):
                 continue
-            vec = self.vectorizers[country]
-            c_mat = self.matrices[country]
-            c_ids = self.candidate_ids[country]
+                
+            # Load only the current country into memory
+            vec = joblib.load(vec_path)
+            c_mat = joblib.load(os.path.join(self.cache_dir, f'mat_{country}.joblib'))
+            c_ids = joblib.load(os.path.join(self.cache_dir, f'ids_{country}.joblib'))
             
             # Transform queries
             q_mat = vec.transform(grp['combined_text'])
@@ -119,5 +117,9 @@ class TfidfBlocker(BaseBlocker):
             
             for res in chunk_results:
                 all_results.extend(res)
+                
+            # Free memory for this country before moving to the next
+            del vec, c_mat, c_ids, q_mat
+            gc.collect()
                 
         return pd.DataFrame(all_results)
