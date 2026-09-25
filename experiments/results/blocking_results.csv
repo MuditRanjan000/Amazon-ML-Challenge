@@ -1,0 +1,4 @@
+experiment_id,method,text_fields,ngram_range,recall_10,recall_25,recall_50,recall_100,recall_200,avg_candidates,runtime,memory,notes
+EXP-002B-small,tfidf_partitioned_D1,business_name,"(3, 5)",0.5222095671981777,0.5925398633257403,0.6395216400911162,0.6853644646924829,0.7223804100227791,200.0,633.6862905025482,Optimized,1000 query signal benchmark
+EXP-002B-small,tfidf_partitioned_D2,business_name+business_address,"(3, 5)",0.9020385050962627,0.9312004530011325,0.9439411098527747,0.9544167610419027,0.9629105322763307,200.0,451.8139660358429,Optimized,1000 query signal benchmark
+EXP-002B-small,tfidf_partitioned_D3,business_name+business_address,"(3, 6)",0.9007611241217799,0.9282786885245902,0.9402810304449649,0.9505269320843092,0.9607728337236534,200.0,1423.4845561981201,Optimized,1000 query signal benchmark

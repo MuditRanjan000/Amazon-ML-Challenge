@@ -1,50 +1,53 @@
-# Amazon ML Challenge 2026 - Business Entity Resolution
+# Amazon ML Challenge 2026 — Business Entity Resolution
 
-## Project Objective
-Determine which records across three independent data sources refer to the same real-world business entity despite partial and noisy data.
+For every Source-1 (reference) business, find all Source-2/3 records describing the same real-world entity.
+The metric is the macro F0.5 over S1 entities (precision-heavy; singletons count). The full rules are in `6ab10eb3b23ba_student_resource/student_resource/README.md`.
 
-## Challenge Description
-Source 1 is the deduplicated reference source. The goal is to find all matching records from Source 2 and Source 3 for each Source 1 entity. 
-
-## Folder Structure
-- `artifacts/`: Contains frozen experiment-control artifacts (like `validation_split/`). These files must NOT change to ensure identical benchmarking across the team.
-- `data/`: Contains dataset descriptions (datasets ignored via .gitignore).
-- `docs/`: Methodology, playbooks, and reports.
-- `experiments/`: Experiment registry and results.
-- `models/`: Saved model weights (ignored via .gitignore).
-- `notebooks/`: Jupyter notebooks for exploratory work.
-- `output/`: Generated submission files (`matching_results.tsv`, `candidate_pairs.tsv`).
-- `scripts/`: Standalone scripts for deployment and environment management.
-- `src/`: Main source code containing data loaders, evaluators, blocking algorithms, features, and ML models.
-
-## Setup Instructions
-1. Unzip the challenge dataset into `6ab10eb3b23ba_student_resource/` or adjust the data paths in `.env` / configuration.
-2. Install dependencies: `pip install -r requirements.txt`.
-3. Run the validation split creation to setup the local environment.
-
-## Generating a Submission
-To generate a submission from your final predicted matches:
-```python
-from src.entity_resolution.submission.generator import SubmissionGenerator
-generator = SubmissionGenerator()
-generator.generate(test_s1_ids, predicted_matches_dict, "matching_results.tsv")
-```
-
-## Validating a Submission
-Always validate before submitting to the portal:
+## Setup (≈2 min)
 ```bash
-python scripts/validate_submission.py --submission output/matching_results.tsv --test-dir 6ab10eb3b23ba_student_resource/student_resource/dataset/test
+python -m venv .venv
+.venv\Scripts\activate            # Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt   # exact pinned versions
+pip install -e .                  # installs the `entity_resolution` package from src/
+python -m pytest -q               # 25 tests, ~3 s
 ```
-This ensures no duplicates, correct TSV formatting, and strict valid ID checking.
+Data: unzip the challenge resource so that `6ab10eb3b23ba_student_resource/student_resource/dataset/{train,test}` exists at the repo root. Alternatively, point `ER_DATA_DIR` somewhere else (see `.env.example`). No path is hardcoded anywhere.
 
-## Experiment Workflow
-1. Check `AI_CONTEXT.md` and the playbook.
-2. Define a hypothesis in `experiments/results/experiment_registry.csv`.
-3. Create logic in `src/` modularly.
-4. Run locally against the frozen validation split.
-5. Commit with the experiment ID.
+## Commands
+| Task | Command |
+|---|---|
+| Baseline, validation split | `python execution/run_baseline.py --split val` |
+| Baseline test submission + official validation | `python execution/run_baseline.py --split test` |
+| Benchmark blocking (fast dev loop) | `python execution/run_blocking_eval.py --exp-id BLK-0xx --sample 20000 --analyzer word --fields business_name business_address` |
+| Validate output files | `python scripts/validate_submission.py [--check-ids]` |
+| Keep agent docs mirrored | `python execution/sync_agent_docs.py [--check]` |
 
-## Team Workflow
-- **Mudit:** Project lead, integration, validation, evaluation.
-- **Aayush:** Candidate generation and blocking.
-- **Ashank:** Matcher models, feature engineering, and thresholds.
+Every run appends one JSON line to `experiments/results/experiments.jsonl`. The line records the git commit, config, metrics, runtime and peak RAM.
+
+## Layout
+```
+src/entity_resolution/
+  config.py              all paths/settings (env-overridable)
+  tracking.py            experiment log (JSONL), peak RSS, git commit
+  data/loader.py         exact TSV parsing -> parquet cache; explode_id_lists()
+  data/preprocessing.py  shared normalizer (Unicode-safe; blocking AND matching use it)
+  data/validation_split.py  frozen split, SHA-256 verified against the committed manifest
+  blocking/              exact-name + TF-IDF (forward & reverse) blockers, union, blocking evaluator
+  evaluation/evaluator.py   official macro F0.5 (+ per-entity scores for error analysis)
+  submission/            official-format writers + wrapper around the organisers' validator
+execution/   thin CLI entry points (Layer 3)      directives/  SOPs (Layer 1)
+tests/       pytest suite                          experiments/results/  manifest + run log
+```
+
+## Resource behaviour (measured on a 15.6 GB / 20-thread laptop)
+- **Loading:** the TSVs are parsed once with pyarrow and cached as parquet. The full train baseline (2.2M S1 against 10.3M S2+S3) runs in about 70 s with a 5.3 GB peak.
+- **Blocking:** hashed TF-IDF plus `sparse_dot_topn` keeps only the top-k per query, so memory is bounded (the full 10.3M index peaks at about 6–11 GB). Candidate IDs are int32 categoricals.
+- **Speed limit:** exhaustive sparse retrieval is bound by memory bandwidth and gains little beyond 4 threads. Throughput is config-dependent (see `directives/blocking.md`). Full test-scale runs belong on AWS (`docs/aws_strategy.md`, `Dockerfile`).
+
+## Data-handling rules baked into the code
+- TSVs are read as raw text: no quote processing, no `NA`→NaN, and CRLF is stripped. Default pandas would silently alter about 800 test fields that contain `"`.
+- Text normalization removes punctuation by Unicode category. The old `[^\w\s]` regex shredded every Devanagari name.
+- `country` is an open set. Test adds France, and unseen countries are searched against every partition.
+
+## Team workflow
+See `AGENTS.md` (mirrored to `CLAUDE.md` / `GEMINI.md`) and `docs/github_automation_policy.md`. In short: work on your own branch, open a PR, and Mudit merges. Owners: Mudit (validation, integration, submission), Aayush (blocking), Ashank (matching).

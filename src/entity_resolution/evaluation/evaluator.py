@@ -1,80 +1,58 @@
-import pandas as pd
+"""Official challenge metric: macro-average F0.5 over Source-1 entities (vectorized).
+
+Per S1 entity with true set T and predicted set P:
+  * T empty, P empty  -> 1.0  (correct singleton)
+  * T empty, P not    -> 0.0  (false merge on a singleton)
+  * otherwise         -> F0.5 = 1.25*p*r / (0.25*p + r), p=|T∩P|/|P|, r=|T∩P|/|T| (0 if |P|=0)
+Averaged over every S1 row of the ground truth frame.
+"""
 import numpy as np
+import pandas as pd
+
+from ..data.loader import explode_id_lists
+
+
+def f05(precision, recall):
+    """Elementwise F0.5; 0 where precision + recall == 0. Works on scalars and arrays."""
+    p, r = np.asarray(precision, dtype=float), np.asarray(recall, dtype=float)
+    denom = 0.25 * p + r
+    return np.where(denom > 0, 1.25 * p * r / np.where(denom > 0, denom, 1), 0.0)
+
+
+def per_entity_scores(ground_truth: pd.DataFrame, predictions: pd.DataFrame,
+                      pred_col: str = "matched_entity_ids") -> pd.DataFrame:
+    """One row per GT S1 entity: n_true, n_pred, tp, precision, recall, f05 (for error analysis)."""
+    s1 = pd.Index(ground_truth["source1_entity_id"].astype("string[pyarrow]"), name="source1_entity_id")
+    true_pairs = explode_id_lists(ground_truth, "matched_entity_ids")
+    pred_pairs = explode_id_lists(predictions, pred_col)
+    pred_pairs = pred_pairs[pred_pairs["source1_entity_id"].isin(s1)]
+
+    def count(frame):
+        return frame.groupby("source1_entity_id").size().reindex(s1, fill_value=0).to_numpy()
+
+    n_true, n_pred = count(true_pairs), count(pred_pairs)
+    tp = count(pred_pairs.merge(true_pairs, on=["source1_entity_id", "candidate_entity_id"]))
+    precision = np.divide(tp, n_pred, out=np.zeros(len(s1)), where=n_pred > 0)
+    recall = np.divide(tp, n_true, out=np.zeros(len(s1)), where=n_true > 0)
+    score = f05(precision, recall)
+    correct_singleton = (n_true == 0) & (n_pred == 0)
+    precision[correct_singleton] = recall[correct_singleton] = score[correct_singleton] = 1.0
+    return pd.DataFrame({"n_true": n_true, "n_pred": n_pred, "tp": tp, "precision": precision,
+                         "recall": recall, "f05": score}, index=s1)
+
 
 class Evaluator:
-    def __init__(self):
-        pass
-        
-    def _parse_id_list(self, ids_str) -> set:
-        if pd.isna(ids_str) or str(ids_str).strip() == "":
-            return set()
-        return set(str(ids_str).split(','))
-
     def evaluate(self, ground_truth: pd.DataFrame, predictions: pd.DataFrame) -> dict:
-        """
-        Evaluate predictions against ground truth using the official competition F0.5 macro-average metric.
-        ground_truth: DataFrame with columns ['source1_entity_id', 'matched_entity_ids']
-        predictions: DataFrame with columns ['source1_entity_id', 'matched_entity_ids']
-        """
-        merged = pd.merge(ground_truth, predictions, on='source1_entity_id', how='left', suffixes=('_true', '_pred'))
-        
-        f05_scores = []
-        precisions = []
-        recalls = []
-        
-        # Singletons tracking
-        true_singletons = 0
-        correct_singletons = 0
-        
-        for _, row in merged.iterrows():
-            true_set = self._parse_id_list(row['matched_entity_ids_true'])
-            pred_set = self._parse_id_list(row['matched_entity_ids_pred'])
-            
-            is_true_singleton = (len(true_set) == 0)
-            if is_true_singleton:
-                true_singletons += 1
-                
-            if is_true_singleton and len(pred_set) == 0:
-                f05_scores.append(1.0)
-                precisions.append(1.0)
-                recalls.append(1.0)
-                correct_singletons += 1
-                continue
-            elif is_true_singleton and len(pred_set) > 0:
-                f05_scores.append(0.0)
-                precisions.append(0.0)
-                recalls.append(0.0)
-                continue
-            elif not is_true_singleton and len(pred_set) == 0:
-                f05_scores.append(0.0)
-                precisions.append(0.0)
-                recalls.append(0.0)
-                continue
-                
-            tp = len(true_set.intersection(pred_set))
-            fp = len(pred_set - true_set)
-            fn = len(true_set - pred_set)
-            
-            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-            recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-            
-            precisions.append(precision)
-            recalls.append(recall)
-            
-            if precision + recall == 0:
-                f05_scores.append(0.0)
-            else:
-                f05 = (1.25 * precision * recall) / (0.25 * precision + recall)
-                f05_scores.append(f05)
-                
-        metrics = {
-            "macro_f05": np.mean(f05_scores),
-            "macro_precision": np.mean(precisions),
-            "macro_recall": np.mean(recalls),
-            "total_entities": len(f05_scores),
-            "true_singletons": true_singletons,
-            "correct_singletons": correct_singletons,
-            "singleton_accuracy": correct_singletons / true_singletons if true_singletons > 0 else 0.0
+        """ground_truth / predictions: columns ['source1_entity_id', 'matched_entity_ids']."""
+        e = per_entity_scores(ground_truth, predictions)
+        singletons = e["n_true"] == 0
+        correct = int((singletons & (e["n_pred"] == 0)).sum())
+        return {
+            "macro_f05": float(e["f05"].mean()),
+            "macro_precision": float(e["precision"].mean()),
+            "macro_recall": float(e["recall"].mean()),
+            "total_entities": int(len(e)),
+            "true_singletons": int(singletons.sum()),
+            "correct_singletons": correct,
+            "singleton_accuracy": correct / int(singletons.sum()) if singletons.any() else 0.0,
         }
-        
-        return metrics

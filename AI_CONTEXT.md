@@ -64,3 +64,7 @@ A 20% validation split on `source1_entity_id` is strictly enforced and frozen to
 # Important Decisions
 - Team Playbook adopted as the core execution strategy.
 - Repositiory migrated to a strict, modular framework under `src/entity_resolution`.
+- AGENTS.md rule 5 (push to main + tradebot redeploy) replaced with branch + PR policy; CLAUDE.md/GEMINI.md mirror AGENTS.md via `execution/sync_agent_docs.py` (PR from `feature/aayush-agent-docs`).
+- Blocking contract + oracle-ceiling F0.5 metric + hand-off gates proposed in `directives/blocking.md` (pending Ashank/Mudit sign-off).
+- 2026-09-25 pipeline refactor (`feature/aayush-pipeline-refactor`): installable package, pinned deps, env-driven config, raw-text parquet loader, Unicode-safe normalizer (fixes the Devanagari shredding bug), sparse top-k TF-IDF (no OOM on 15.6 GB), vectorized evaluators, official-validator wrapper, JSONL experiment log, 25 tests.
+- **Current best blocking (BLK-011, 20k val):** word-unigram TF-IDF on name+address, forward top-K, `max_df` 0.02: R@10 0.912 / R@50 0.956 / R@200 0.972; ceiling F0.5 ≥ 0.96 in every bucket. The next experiments are reverse + union and a full-val run to freeze K / max_df.

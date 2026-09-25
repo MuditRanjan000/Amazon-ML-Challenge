@@ -10,9 +10,10 @@ Establish a naive baseline for the Amazon ML Challenge 2026 by matching Source 2
 - `6ab10eb3b23ba_student_resource/student_resource/dataset/train/train_ground_truth.tsv`
 
 ## Outputs
-- `.tmp/baseline_matching_results.tsv`: Final matches in the required format.
-- `.tmp/baseline_candidate_pairs.tsv`: Candidates (identical to matches for this baseline).
-- Local F0.5 score printed to the console.
+- `--split train|val`: local F0.5 printed and logged to `experiments/results/experiments.jsonl`. The regression target on full train is **0.19372** (reproduced 2026-09-25 by the refactored pipeline: 0.1937173).
+- `--split test`: `output/matching_results.tsv` + `output/candidate_pairs.tsv` (candidates == matches), validated with the official validator (PASS, including `--check-ids`).
+
+Run: `python execution/run_baseline.py --split {train,val,test}`. Data paths come from `ER_DATA_DIR`; nothing is hardcoded.
 
 ## Script to Use / Create
 - `execution/run_baseline.py`

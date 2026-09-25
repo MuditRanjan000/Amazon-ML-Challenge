@@ -3,21 +3,29 @@
 *.pdf
 *.tsv
 *.csv
-
 # Exceptions for frozen artifacts
 !artifacts/
 !artifacts/validation_split/
 !artifacts/validation_split/*.csv
 !artifacts/validation_split/*.json
 
+!experiments/results/*.csv
+*.parquet
 dataset/
 output/
 models/
 
 # Intermediate and Temporary files
 .tmp/
-scratch_*.py
-test_*.py
+# scratch scripts are banned from the repo ROOT only; tests/ must be committable
+/scratch_*.py
+/test_*.py
+.pytest_cache/
+
+# Personal agent layers (per-operator, never shared)
+CLAUDE.local.md
+GEMINI.local.md
+.claude/settings.local.json
 
 # Credentials and Configs
 .env

@@ -1,36 +1,65 @@
+"""Frozen, verifiable train/validation split on Source-1 entity IDs.
+
+The split files are gitignored, so every load is checked against the committed
+SHA-256 manifest (`experiments/results/validation_split_manifest.json`). A
+mismatch raises instead of silently evaluating on a different split.
+Regenerating from the ground truth reproduces the manifest byte-for-byte.
+"""
+import hashlib
+import json
+from pathlib import Path
+
+import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-import os
+from .. import config
 
-def create_validation_split(ground_truth_df: pd.DataFrame, test_size=0.2, random_state=42) -> tuple:
-    """
-    Split the dataset based on Source 1 entity IDs ensuring no leakage.
-    Returns (train_s1_ids, val_s1_ids) as sets.
-    """
-    out_dir = "artifacts/validation_split"
-    os.makedirs(out_dir, exist_ok=True)
-    
-    train_path = os.path.join(out_dir, "train_ids.csv")
-    val_path = os.path.join(out_dir, "val_ids.csv")
-    
-    if os.path.exists(train_path) and os.path.exists(val_path):
-        train_ids = set(pd.read_csv(train_path)['entity_id'])
-        val_ids = set(pd.read_csv(val_path)['entity_id'])
-        return train_ids, val_ids
+SPLIT_FILES = {"train": "train_ids.csv", "val": "val_ids.csv"}
+MANIFEST_KEYS = {"train": "train_id_file_sha256", "val": "validation_id_file_sha256"}
 
-    unique_s1_ids = ground_truth_df['source1_entity_id'].unique()
-    train_ids, val_ids = train_test_split(unique_s1_ids, test_size=test_size, random_state=random_state)
-    
-    pd.DataFrame({'entity_id': train_ids}).to_csv(train_path, index=False)
-    pd.DataFrame({'entity_id': val_ids}).to_csv(val_path, index=False)
-    
-    return set(train_ids), set(val_ids)
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def verify_split_files(split_dir=None, manifest_path=None) -> None:
+    split_dir, manifest_path = Path(split_dir or config.SPLIT_DIR), Path(manifest_path or config.SPLIT_MANIFEST)
+    if not manifest_path.exists():
+        return
+    manifest = json.loads(manifest_path.read_text())
+    for part, name in SPLIT_FILES.items():
+        got, want = _sha256(split_dir / name), manifest[MANIFEST_KEYS[part]]
+        if got != want:
+            raise RuntimeError(
+                f"{split_dir / name} does not match the frozen manifest (sha256 {got} != {want}). "
+                "Delete the split files to regenerate them, or get them from Mudit.")
+
+
+def create_validation_split(ground_truth_df: pd.DataFrame = None, test_size=0.2, random_state=None,
+                            split_dir=None, manifest_path=None) -> tuple:
+    """Return (train_s1_ids, val_s1_ids) as sets; load frozen files or create them.
+
+    `ground_truth_df` is only needed the first time (to create the files).
+    """
+    split_dir = Path(split_dir or config.SPLIT_DIR)
+    paths = {part: split_dir / name for part, name in SPLIT_FILES.items()}
+    if not all(p.exists() for p in paths.values()):
+        if ground_truth_df is None:
+            raise FileNotFoundError(f"No split files in {split_dir}; pass the ground truth to create them.")
+        # Appearance-ordered unique IDs as a plain numpy array: identical order to the
+        # original pandas-2 implementation (pandas 3 returns an Arrow array sklearn cannot index).
+        ids = np.asarray(ground_truth_df["source1_entity_id"].unique(), dtype=object)
+        train_ids, val_ids = train_test_split(
+            ids, test_size=test_size, random_state=config.SEED if random_state is None else random_state)
+        split_dir.mkdir(parents=True, exist_ok=True)
+        for part, arr in (("train", train_ids), ("val", val_ids)):
+            # lineterminator fixed so the bytes (and hash) are identical on every OS
+            pd.DataFrame({"entity_id": arr}).to_csv(paths[part], index=False, lineterminator="\r\n")
+    verify_split_files(split_dir, manifest_path)
+    return tuple(set(pd.read_csv(paths[p], dtype=str)["entity_id"]) for p in ("train", "val"))
+
 
 def apply_validation_split(df: pd.DataFrame, s1_id_col: str, train_ids: set, val_ids: set) -> tuple:
-    """
-    Split a DataFrame containing a source1 entity ID column into train and validation subsets.
-    """
-    train_df = df[df[s1_id_col].isin(train_ids)].copy()
-    val_df = df[df[s1_id_col].isin(val_ids)].copy()
-    return train_df, val_df
+    """Split a frame holding Source-1 IDs into (train_df, val_df)."""
+    return df[df[s1_id_col].isin(train_ids)].copy(), df[df[s1_id_col].isin(val_ids)].copy()

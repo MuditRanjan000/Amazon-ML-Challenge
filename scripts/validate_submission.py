@@ -1,25 +1,25 @@
+"""Validate output files with the organisers' official validator.
+
+  python scripts/validate_submission.py                       # output/matching_results.tsv + candidate_pairs.tsv
+  python scripts/validate_submission.py --check-ids           # also verify every ID exists (more RAM)
+"""
 import argparse
 import sys
-import os
 
-# Add src to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from src.entity_resolution.submission.validator import SubmissionValidator
+from entity_resolution import config
+from entity_resolution.submission.validator import SubmissionValidator
+
 
 def main():
-    parser = argparse.ArgumentParser(description="Validate submission TSV for Amazon ML Challenge 2026")
-    parser.add_argument("--submission", required=True, help="Path to the generated submission file (e.g., output/matching_results.tsv)")
-    parser.add_argument("--test-dir", required=True, help="Directory containing the test TSV files")
-    
-    args = parser.parse_args()
-    
-    validator = SubmissionValidator(test_dir=args.test_dir)
-    is_valid = validator.validate(args.submission)
-    
-    if not is_valid:
-        sys.exit(1)
-    else:
-        sys.exit(0)
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--submission", "--matching", dest="matching", default=str(config.OUTPUT_DIR / "matching_results.tsv"))
+    p.add_argument("--candidate", default=str(config.OUTPUT_DIR / "candidate_pairs.tsv"))
+    p.add_argument("--test-dir", default=str(config.DATA_DIR / "test"))
+    p.add_argument("--check-ids", action="store_true")
+    a = p.parse_args()
+    ok = SubmissionValidator(a.test_dir).validate(a.matching, a.candidate, check_ids=a.check_ids)
+    sys.exit(0 if ok else 1)
+
 
 if __name__ == "__main__":
     main()
