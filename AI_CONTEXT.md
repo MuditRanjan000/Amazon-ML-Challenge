@@ -1,34 +1,47 @@
-# Amazon ML Challenge 2026 - AI Context
+# Project Overview
+Amazon ML Challenge 2026 - Business Entity Resolution. Goal is to map Source 2 and Source 3 entities to a reference set of Source 1 entities across large, noisy, multilingual datasets.
 
-## Current Understanding of the Problem
-The task is a Business Entity Resolution challenge. We need to match business entities across three independent noisy data sources. Source 1 is a deduplicated reference source. Our goal is to find all matching records from Source 2 and Source 3 for each Source 1 entity. 
+# Challenge Understanding
+- **Input:** 3 TSV sources with `entity_id`, `business_name`, `business_address`, `country`.
+- **Output:** Two TSV files: `matching_results.tsv` (scored on leaderboard) and `candidate_pairs.tsv` (used for auditing).
+- **Metric:** Macro-averaged F0.5 per Source 1 entity. Precision is weighted 2x over recall. Singletons must be correctly predicted as empty.
+- **Constraints:** Max 8B parameter model, MIT/Apache 2.0 license, no external data/APIs.
 
-- **Evaluation Metric:** F0.5 score (macro-averaged per Source 1 entity). This metric heavily penalizes false merges (precision is weighted 2x over recall). Singletons are included in the score calculation.
-- **Submissions:** Output format requires two files: `matching_results.tsv` (final matches) and `candidate_pairs.tsv` (blocking candidates before final inference).
-- **Constraints:** Max model size: 8 Billion parameters. External Data lookup is STRICTLY PROHIBITED.
+# Dataset Discoveries
+- Train set: S1 (~2.2M), S2 (~5M), S3 (~5.2M). Test set: S1 (~1.7M), S2 (~4.8M), S3 (~5.0M).
+- S1 entities map to zero, one, or many S2/S3 entities (1-to-many relationship).
+- About 5.5% of train S1 entities are singletons (0 matches).
+- Noise includes transliterations (English/Hindi/Tamil), missing addresses, typos, and formatting differences.
 
-## Dataset Discoveries
-- **Volume:** ~2.2M Source 1 entities in train, ~1.7M in test. ~10M S2/S3 candidates in train, ~10M in test.
-- **Missing Data:** Names are mostly present. Addresses are missing in ~3% of S2/S3 records.
-- **Singletons:** ~5.5% of S1 entities have no matches.
-- **Matches:** This is a one-to-many mapping. An S1 entity maps to 1 to 11 records in S2/S3 (mode is 3 matches). No many-to-one mappings exist.
-- **Noise:** Transliteration (English to Hindi/Tamil), typos, truncated names, missing address components, and abbreviation variations.
+# Current Architecture
+- Modular pipeline split into: Data Loading -> Validation Split -> Candidate Generation (Blocking) -> Pairwise Feature Engineering -> Model Inference -> Threshold Logic.
+- Current codebase relies on deterministic exact matching (Baseline).
 
-## Experiments Completed
-- Dataset Analysis & Profiling (Completed via script)
-- Experiment 1 (Baseline): Exact string match on normalized `business_name` partitioned by country.
+# Team Responsibilities
+- **Mudit:** Project lead, validation framework, F0.5 evaluator, experiment tracking, integration, final submission.
+- **Aayush:** Candidate generation / blocking specialist, retrieval strategies, candidate recall optimization.
+- **Ashank:** Matching model specialist, feature engineering, ML models, threshold optimization, model-side error analysis.
 
-## Scores Achieved
-- Local F0.5: 0.19372 (Baseline - Exact Match)
-- Public Leaderboard: N/A
+# Completed Experiments
+- EXP-001: Baseline Exact Match
 
-## Failed Approaches
+# Experiment Results
+- **EXP-001:** F0.5 = 0.19372. Baseline confirms need for fuzzy matching and blocking.
+
+# Current Best Pipeline
+- Exact string matching on normalized business names partitioned by country. (Baseline)
+
+# Known Issues
+- Baseline misses all typo, transliteration, and abbreviation variations, resulting in extremely poor recall.
+
+# Future Experiments
+- Implement robust cross-validation split (Mudit).
+- TF-IDF character n-gram blocking to improve candidate recall (Aayush).
+- Pairwise string distance features + LightGBM matching (Ashank).
+
+# Submission History
 - None yet.
 
-## Current Best Pipeline
-- **Proposed:** TF-IDF character n-gram blocking (partitioned by country) -> Pair-wise Feature Engineering -> LightGBM Classifier -> High probability thresholding (optimized for F0.5).
-
-## Next Recommended Action
-- Await user approval on the proposed strategy.
-- Set up local validation split and F0.5 evaluator script.
-- Build the baseline (Exact match) to establish a baseline score.
+# Important Decisions
+- Team Playbook adopted as the core execution strategy.
+- Repositiory migrated to a strict, modular framework under `src/entity_resolution`.
