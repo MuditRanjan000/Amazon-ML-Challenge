@@ -16,6 +16,7 @@ dependencies = [
     "scikit-learn>=1.5",
     "sparse_dot_topn>=1.1",   # Apache-2.0; memory-bounded sparse top-k matmul
     "psutil>=5.9",
+    "anyascii>=0.3",          # ISC; Indic -> ASCII for the name_key blocking channel
 ]
 
 [project.optional-dependencies]

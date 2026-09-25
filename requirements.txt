@@ -14,5 +14,7 @@ tzdata==2026.4
 six==1.17.0
 # matcher-side (Ashank): string similarity features
 RapidFuzz==3.14.6
+# blocking: Indic -> ASCII transliteration for the name_key channel (ISC licence; NOT unidecode, GPL)
+anyascii==0.3.3
 # dev / tests
 pytest==9.1.1

@@ -104,3 +104,11 @@ def test_blocking_evaluator_accepts_categorical_output():
     got = _blocker().fit(_records("S2", NAMES[1::2])).generate_candidates(_records("S1", NAMES[0::2]), k=1)
     m = BlockingEvaluator(gt).evaluate(got, k_values=(1,))
     assert m["recall_at_1"] == pytest.approx(1.0)
+
+
+def test_name_key_bridges_scripts_domains_and_legal_words():
+    from entity_resolution.blocking.keys import name_key
+    got = name_key(pd.Series(["Super Hospitality Private Limited", "सुपर हॉस्पिटैलिटी प्राइवेट लिमिटेड",
+                              "kirkaerospace.com", "Kirk Aerospace LLC", None]))
+    assert got.tolist() == ["superhospitality", "suprhospitailiti", "kirkaerospace", "kirkaerospace", ""]
+    assert name_key(pd.Series(["Hospitality"]), skeleton=True).tolist() == ["hsptlt"]
