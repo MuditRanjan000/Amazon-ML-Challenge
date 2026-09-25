@@ -24,6 +24,7 @@ Amazon ML Challenge 2026 - Business Entity Resolution. Goal is to map Source 2 a
 
 # Completed Experiments
 - EXP-001: Baseline Exact Match
+- System validation framework established.
 
 # Experiment Results
 - **EXP-001:** F0.5 = 0.19372. Baseline confirms need for fuzzy matching and blocking.
@@ -35,8 +36,7 @@ Amazon ML Challenge 2026 - Business Entity Resolution. Goal is to map Source 2 a
 - Baseline misses all typo, transliteration, and abbreviation variations, resulting in extremely poor recall.
 
 # Future Experiments
-- Implement robust cross-validation split (Mudit).
-- TF-IDF character n-gram blocking to improve candidate recall (Aayush).
+- **Current Goal:** Establish a robust candidate generation (blocking) framework. We are starting with an exact normalized name baseline to measure the strict recall floor before testing token, character n-gram, and TF-IDF blocking strategies.
 - Pairwise string distance features + LightGBM matching (Ashank).
 
 # Submission History
