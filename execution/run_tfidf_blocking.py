@@ -23,10 +23,10 @@ def run_experiment():
     
     train_ids, val_ids = create_validation_split(gt)
     
-    # 10k Validation Sample
+    # 1k Validation Sample for Fast Signal Experiment
     import random
     random.seed(42)
-    val_ids_sample = set(random.sample(list(val_ids), min(10000, len(val_ids))))
+    val_ids_sample = set(random.sample(list(val_ids), min(1000, len(val_ids))))
     
     val_s1, _ = apply_validation_split(s1_full, 'entity_id', val_ids_sample, train_ids)
     val_gt, _ = apply_validation_split(gt, 'source1_entity_id', val_ids_sample, train_ids)
@@ -61,7 +61,7 @@ def run_experiment():
         index_time = time.time() - start_time
         print(f"Index built in {index_time:.2f}s")
         
-        print(f"Generating Candidates for 10k queries...")
+        print(f"Generating Candidates for 1k queries...")
         gen_start = time.time()
         candidates = blocker.generate_candidates(val_s1, k=200)
         total_time = index_time + (time.time() - gen_start)
@@ -69,23 +69,22 @@ def run_experiment():
         print("Evaluating results...")
         results = evaluator.evaluate(candidates)
         
-        for k in [10, 25, 50, 100, 200]:
-            recall = results.get(f'recall_at_{k}', 0)
-            avg_cand = results.get(f'avg_cand_at_{k}', 0)
-            
-            log_df = pd.DataFrame([{
-                'experiment_id': 'EXP-002B',
-                'method': f"tfidf_partitioned_{v['name']}",
-                'text_fields': "+".join(v['fields']),
-                'ngram_range': str(v['ngrams']),
-                'candidate_k': k,
-                'candidate_recall': recall,
-                'avg_candidates': avg_cand,
-                'runtime': total_time,
-                'memory': 'Optimized',
-                'notes': "Partitioned by Country"
-            }])
-            log_df.to_csv(log_path, mode='a', header=False, index=False)
+        log_df = pd.DataFrame([{
+            'experiment_id': 'EXP-002B-small',
+            'method': f"tfidf_partitioned_{v['name']}",
+            'text_fields': "+".join(v['fields']),
+            'ngram_range': str(v['ngrams']),
+            'recall_10': results.get('recall_at_10', 0),
+            'recall_25': results.get('recall_at_25', 0),
+            'recall_50': results.get('recall_at_50', 0),
+            'recall_100': results.get('recall_at_100', 0),
+            'recall_200': results.get('recall_at_200', 0),
+            'avg_candidates': results.get('avg_cand_at_200', 0),
+            'runtime': total_time,
+            'memory': 'Optimized',
+            'notes': "1000 query signal benchmark"
+        }])
+        log_df.to_csv(log_path, mode='a', header=False, index=False)
             
         print(f"Total Time: {total_time:.2f}s | K=200 Recall: {results.get('recall_at_200', 0):.4f}")
         

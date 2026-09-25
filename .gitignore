@@ -3,6 +3,13 @@
 *.pdf
 *.tsv
 *.csv
+
+# Exceptions for frozen artifacts
+!artifacts/
+!artifacts/validation_split/
+!artifacts/validation_split/*.csv
+!artifacts/validation_split/*.json
+
 dataset/
 output/
 models/
