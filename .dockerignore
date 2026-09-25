@@ -1,0 +1,8 @@
+.venv
+.git
+.tmp
+output
+6ab10eb3b23ba_student_resource
+*.pdf
+**/__pycache__
+.pytest_cache

@@ -27,3 +27,27 @@
   - `.gitignore` blocks `*.csv` (the registry can't be committed) and `test_*.py`.
   - `execution/*.py` hardcode `c:\Users\dell\...`.
   - `requirements.txt` is empty.
+
+## [2026-09-25] Pipeline refactor: modular, installable, resource-bounded (Aayush, `feature/aayush-pipeline-refactor`)
+- **Packaging:** `pyproject.toml` (src layout, `pip install -e .`, import `entity_resolution.*`), a pinned `requirements.txt` (pandas 3 / pyarrow / sklearn / sparse_dot_topn, all permissive licences), `.env.example`, `Dockerfile` (not yet built: Docker daemon was off), and a `tests/` suite (25 tests).
+- **config.py:** every path comes from env vars / `.env`. All hardcoded `c:\Users\dell\...` paths are gone.
+- **Loader:** a pyarrow raw-text parser (no quote processing, no NA coercion, CRLF safe) cached as parquet. The old default-pandas path rewrote about 800 test fields containing `"`.
+- **Normalizer (shared with matching):** removes punctuation by Unicode category and strips accents from Latin letters only. **Bug fixed:** the old `[^\w\s]` regex shredded every Devanagari name.
+- **Validation split:** fixed a crash on pandas 3, uses repo-root paths, and verifies the SHA-256 against the manifest on every load. Regenerating reproduces Mudit's frozen files byte for byte.
+- **Evaluator:** vectorized, same API and keys, plus `per_entity_scores()` for error analysis. Tested against the original loop implementation.
+- **Blocking:**
+  - `TfidfBlocker` rewritten with hashed TF-IDF and `sparse_dot_topn` (memory-bounded top-k), open-set countries, `max_df`, forward and `reverse_candidates`.
+  - `union_candidates()` added.
+  - `BlockingEvaluator` now reports ceiling F0.5, coverage and buckets on integer codes.
+- **Submission:** vectorized writers for both official files. The validator wraps the official `utils/validate_submission.py`.
+- **Tracking:** `tracking.log_run()` writes to `experiments/results/experiments.jsonl` (commit, config, metrics, runtime, peak RSS).
+- **Removed:** placeholder blockers, unused metric helpers, `run_tfidf_blocking.py` (superseded by the parameterized `run_blocking_eval.py`).
+- **Verified on real data:**
+  - The baseline reproduces EXP-001 (0.1937173).
+  - The baseline test submission passes the official validator, including `--check-ids`.
+  - Forward blocking against the full 10.3M index peaks at 5.9–7.4 GB on the laptop.
+- **Key findings:**
+  - Many-to-one GT: no S2/S3 ID belongs to more than one S1.
+  - Name+address word TF-IDF raises R@50 from 0.706 to 0.958 and the ceiling F0.5 from 0.829 to 0.985.
+  - Sparse top-k is memory-bandwidth bound: no gain beyond about 4 threads.
+  - Details in `directives/blocking.md`.

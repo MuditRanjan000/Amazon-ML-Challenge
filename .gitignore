@@ -3,14 +3,18 @@
 *.pdf
 *.tsv
 *.csv
+!experiments/results/*.csv
+*.parquet
 dataset/
 output/
 models/
 
 # Intermediate and Temporary files
 .tmp/
-scratch_*.py
-test_*.py
+# scratch scripts are banned from the repo ROOT only; tests/ must be committable
+/scratch_*.py
+/test_*.py
+.pytest_cache/
 
 # Personal agent layers (per-operator, never shared)
 CLAUDE.local.md

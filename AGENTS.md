@@ -177,10 +177,19 @@ Metrics to record every time: F0.5, precision, recall, candidate recall, singlet
 Registry columns: `Experiment ID | Date | Git commit | Blocking | Features | Model | Threshold | Candidate recall | Precision | Recall | F0.5 | Runtime | Memory | Notes`.
 Never delete or rewrite an earlier result because a later one looks better.
 
+## Setup & code conventions
+- Environment: `python -m venv .venv` → `pip install -r requirements.txt` (pinned) → `pip install -e .`. Import as `entity_resolution.*`, never `src.entity_resolution.*`.
+- All paths and settings come from `entity_resolution.config` (env vars / `.env`, see `.env.example`).
+- Library code lives in `src/entity_resolution/`. CLI entry points are thin scripts in `execution/`. Tests live in `tests/`: run `python -m pytest -q` before every commit and add a test with every non-trivial function.
+- Log every experiment with `entity_resolution.tracking.log_run()` (→ `experiments/results/experiments.jsonl`, with commit, config, metrics, runtime and peak RSS).
+
 ## Engineering rules for this dataset
 - Never do O(N²) all-pairs work. Never materialize dense `(queries × index)` similarity matrices at full scale; use sparse top-k or ANN.
-- Never hardcode machine paths (the existing `c:\Users\dell\...` paths are legacy). Read the data root from the `ER_DATA_DIR` env var (`.env`).
-- Load the multi-million-row TSVs once, with explicit dtypes. Prefer integer codes over string IDs in hot loops. Write intermediates as parquet under `.tmp/` or `output/`, never to git.
+- Never hardcode machine paths. The data root comes from `ER_DATA_DIR`.
+- Load data only through `DataLoader`: it parses TSVs as raw text (no quote processing, no `NA`→NaN) and caches them as parquet. Plain `pd.read_csv` silently rewrites about 800 test fields that contain `"`.
+- Normalize text only through `data/preprocessing.py`. Never use `[^\w\s]` for punctuation: it shreds Devanagari.
+- Prefer integer codes or categoricals over string IDs in hot loops. Write intermediates as parquet under `.tmp/` or `output/`, never to git.
+- Output files only through `submission/generator.py` and validate them with `scripts/validate_submission.py` (it wraps the official validator).
 - Any library or model added must be license-compatible (prefer MIT/Apache/BSD/ISC; **avoid GPL**, e.g. `unidecode`) and must run offline.
 - AWS runs: push the commit first, use spot instances, and terminate right after the outputs land in S3 (`docs/aws_strategy.md`).
 

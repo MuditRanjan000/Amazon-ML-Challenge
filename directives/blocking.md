@@ -43,12 +43,35 @@ Choose the **knee** of the ceiling-vs-pairs curve, not the maximum K.
 ## Scripts
 | Script | Status |
 |---|---|
-| `execution/profile_blocking.py` | to build: GT structure (many-to-one?), country agreement, field survival |
-| `execution/run_blocking.py` | to build: channels → union → parquet + sidecar |
+| `execution/run_blocking_eval.py` | **ready**: any method, direction and config on the frozen val split (`--sample N` for dev). Logs to `experiments/results/experiments.jsonl`; `--save` writes the candidates parquet. |
+| `execution/profile_blocking.py` | to build: country agreement, field survival (GT structure already measured, see below) |
+| `execution/run_blocking.py` | to build: frozen config → train/val/test parquet + sidecar |
 | `execution/check_candidates.py` | to build: gates G1–G5 |
-| `execution/run_blocking_eval.py`, `run_tfidf_blocking.py` | legacy: hardcoded paths, dense similarity (OOM at full scale) |
+
+Library: `entity_resolution.blocking` provides `TfidfBlocker` (fit/query, forward), `reverse_candidates`, `ExactNameBlocker`, `union_candidates`, and `BlockingEvaluator` (recall@K, ceiling F0.5, coverage, buckets).
+
+## Measured (2026-09-25, 3k val S1 against the full 10.3M train S2+S3 index, laptop 15.6 GB / 20 threads)
+| Config | q/s | R@10 | R@50 | R@200 | ceiling@50 | ceiling@200 |
+|---|---|---|---|---|---|---|
+| char_wb 3-gram, name | 41 | 0.580 | 0.706 | 0.778 | 0.829 | 0.881 |
+| char_wb 4-gram, name | 77 | 0.565 | 0.683 | 0.750 | 0.822 | 0.868 |
+| char_wb 5-gram, name | 112 | 0.552 | 0.658 | 0.724 | 0.811 | 0.858 |
+| word unigram, name | 202 | 0.558 | 0.662 | 0.731 | 0.812 | 0.865 |
+| char_wb 4-gram, name+address | 28 | 0.905 | 0.942 | 0.958 | 0.976 | 0.983 |
+| **word unigram, name+address (default)** | **92** | **0.915** | **0.958** | **0.973** | **0.985** | **0.991** |
+| ↳ + `--max-df 0.05` | 155 | 0.912 | 0.956 | 0.973 | 0.984 | 0.991 |
+| ↳ + `--max-df 0.02` (recommended for dev loops) | 334 | 0.909 | 0.956 | 0.972 | 0.984 | 0.991 |
+| ↳ + `--max-df 0.01` | 572 | 0.907 | 0.954 | 0.971 | 0.984 | 0.990 |
+
+Word-level `max_df` is nearly free (common words like road/street/pvt carry no identity), unlike char n-gram pruning. **Decide the final max_df on the full val split before freezing.**
 
 ## Edge cases & learnings
+- **GT structure (train):** 7,638,365 true pairs. **Every S2/S3 ID belongs to at most one S1** (many-to-one), so reverse retrieval and a one-S1-per-record constraint in the matcher are both valid. 74% of S2+S3 records match some S1; 26% are distractors. Matches per S1: 0 → 123,247 | 1 → 119,157 | 2–5 → 1.71M | 6–11 → 252k.
+- **The address is the biggest recall lever.** Name-only retrieval tops out around R@200 0.78; adding the address reaches R@50 0.96.
+- **Char trigrams on names are a trap at this scale:** each India query touches ~2.1M of 4.1M index rows. `max_df` pruning of char n-grams destroys recall (0.02 → R@200 −4 pts; 0.005 → −22 pts). Short names need their common trigrams.
+- **Sparse top-k is memory-bandwidth bound:** `sp_matmul_topn` gives 18 q/s on 1 thread, 42 on 4, and 46 on 19. Buy memory bandwidth, not cores. 1.73M test S1 at about 90 q/s is about 5.5 h on the laptop, so run full scale on AWS or in parallel processes per country.
+- The loader must read raw text: default pandas quoting rewrites about 800 test fields that contain `"`.
+- The normalizer must not use `[^\w\s]`: it shreds Devanagari (vowel signs are not `\w`).
 - Dense `(queries × index)` similarity is not viable: 500 × 5M float64 ≈ 20 GB per chunk. Use sparse top-k or ANN.
 - Query countries missing from the index must still get candidates. Never skip them.
 - Empty/null names: fall back to address channels. Don't drop the S1 row.
