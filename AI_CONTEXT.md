@@ -33,7 +33,12 @@ A 20% validation split on `source1_entity_id` is strictly enforced and frozen to
 # Active Experiments
 - **EXP-002B**: Optimized Partitioned TF-IDF Blocking.
     - **Stage 1 & 2 (Completed)**: Evaluated D2 vs word-unigram on frozen validation.
-    - **Decision (Mudit)**: The D2 comparison is complete. The final selected blocker is **word unigram** (name+address, K=200). `char_wb` (D2) has been retired.
+    - **BLK-019 fair comparison (same 20k val S1, same harness):**
+      - D2: R@10/50/200 0.902/0.942/0.959, 9.6 S1/s.
+      - word unigram: 0.925/0.963/0.977, 99.8 S1/s.
+      - word + max_df 0.02: 0.920/0.959/0.974, 446 S1/s.
+      - Word@50 beats D2@200.
+    - **Decision (Mudit)**: The D2 comparison is complete (metrics source: BLK-019). The final selected blocker is **word unigram** (name+address, K=200). `char_wb` (D2) has been retired.
 
 # Experiment Results
 - **EXP-001:** F0.5 = 0.19372. Baseline confirms need for fuzzy matching and blocking.

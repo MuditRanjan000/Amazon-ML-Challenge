@@ -72,3 +72,12 @@
 - **Result (BLK-018, 5k val):** R@10 0.900 / R@50 0.940 / R@200 0.957, ceiling F0.5@200 0.984 (original D2: 0.963 on 1k queries, ±0.6pp).
   - **Throughput is about 10 S1/s on the laptop**, so full train+val is about 60 h and test about 48 h locally. Full runs need AWS fan-out or a decision (see AI_CONTEXT).
 - **Comparison, same val split and evaluator (earlier runs):** word-unigram name+address reached R@200 0.972 at 92–334 q/s (BLK-011). The hybrid reached R 0.974 at 120 cands/S1 (BLK-017).
+
+## [2026-09-26] BLK-019: fair D2 vs word-unigram comparison (Aayush)
+- PR #5 (the D2 fix + `--blocker` switch) was merged by Mudit into `feature/mudit-submission` (af44b7c). Before merging, I merged his 4a813f7 into the branch; the conflict was resolved by keeping the rewrite, which already has the same imports.
+- **Setup:** same 20k frozen-val S1, same harness, evaluator, pool, fields, normalizer, min_df 2 and K=200.
+- **Results:**
+  - D2 char_wb (3,5): R@10/50/200 0.902/0.942/0.959, ceiling 0.984, 9.6 S1/s.
+  - Word unigram: 0.925/0.963/0.977, ceiling 0.992, 99.8 S1/s.
+  - Word + max_df 0.02: 0.920/0.959/0.974, ceiling 0.990, 446 S1/s.
+- **Implication:** word beats D2 at every K, and word@50 already exceeds D2@200. Projected train+val runtime on the laptop: D2 ~64 h vs word ~6 h vs word+max_df ~1.4 h.
