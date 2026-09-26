@@ -124,7 +124,7 @@ def apply(a):
     cand = gen.generate_candidates(s1_ids, p)
     logging.info("wrote %s (%d pairs, %d S1 matched) and %s (%d pairs) in %.0fs", match, len(pred),
                  pred["source1_entity_id"].nunique(), cand, len(p), time.time() - t0)
-    ok = SubmissionValidator().validate(match, cand, check_ids=True)
+    ok = None if a.skip_validate else SubmissionValidator().validate(match, cand, check_ids=True)
     log_run({"experiment_id": "RULE-001", "stage": "decision-rule-apply-test", "R": a.R, "t": a.t, "a": a.a,
              "owner": not a.no_owner, "pred_pairs": len(pred), "candidate_pairs": len(p), "validator_pass": ok})
 
@@ -141,6 +141,7 @@ def main():
     x.add_argument("--t", type=float, required=True)
     x.add_argument("--a", type=float, required=True)
     x.add_argument("--no-owner", action="store_true")
+    x.add_argument("--skip-validate", action="store_true", help="e.g. on AWS, where the official validator is not shipped")
     x.add_argument("--out", default=str(config.OUTPUT_DIR))
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
