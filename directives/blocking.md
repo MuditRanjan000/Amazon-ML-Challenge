@@ -7,6 +7,17 @@
 - `python scripts/aws/run_d2_blocking.py --split trainval` → train + validation TSVs from one index/run. `--split test` → test TSV (test S2+S3 index, same config). `--sample N` → val-only timing/recall check, writes no TSV. `--blocker d2|word|word_maxdf02` picks a pinned config (default d2). `--in-memory` on a ≥64 GB box; otherwise the index is sharded to disk under `ER_CACHE_DIR/tfidf_index/<config+data hash>/` and reused.
 - The script refuses to write artifacts from a dirty tree: commit and push first.
 - **Measured (BLK-018, 5k val S1 vs the full 10.3M index, laptop):** R@10 0.900 / R@50 0.940 / R@200 0.957, ceiling F0.5@200 0.984, 0 S1 without candidates. Index build 7 min, 1.41B nnz, 11 GB. **About 10 queries/s** (char (3,5) n-grams hit posting lists covering 18–26% of the partition). Train+val is about 60 h and test about 48 h on the laptop, so full runs need AWS fan-out.
+- **BLK-019 fair comparison (2026-09-26):**
+  - Setup: same 20k frozen-val S1, same harness (`aaac207`), evaluator, pool, fields, normalizer, min_df 2 and K=200. Laptop.
+
+    | Blocker | R@10 | R@50 | R@200 | ceiling@200 | full-cov@200 | index s | query s | S1/s |
+    |---|---|---|---|---|---|---|---|---|
+    | d2 char_wb (3,5) | 0.902 | 0.942 | 0.959 | 0.984 | 0.889 | 425 | 2077 | 9.6 |
+    | word unigram | **0.925** | **0.963** | **0.977** | **0.992** | **0.933** | 211 | 200 | 99.8 |
+    | word + max_df 0.02 | 0.920 | 0.959 | 0.974 | 0.990 | 0.925 | 182 | 45 | 446 |
+
+  - Word beats D2 at every K, and word@50 beats D2@200: 4x fewer pairs.
+  - The final blocker decision is Mudit's.
 - Bugs fixed on 2026-09-26 in the version merged on `feature/mudit-submission`:
   - It ran **word** (3,5)-grams: `analyzer` was never passed, and the default was `word`. A typo pair scores cosine 0.0 under word vs 0.58 under char_wb.
   - It built one Python dict per pair: 353M on train, so OOM.

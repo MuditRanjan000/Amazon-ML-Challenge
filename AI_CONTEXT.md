@@ -41,6 +41,11 @@ A 20% validation split on `source1_entity_id` is strictly enforced and frozen to
       - Val is 441,365 S1, not 35k.
       - Fixed on `experiment/aayush-blocking-hybrid-v2`. Any Stage 2 output produced from the old code is invalid.
     - **BLK-018 (fixed D2, 5k val):** R@10 0.900 / R@50 0.940 / R@200 0.957, ceiling F0.5@200 0.984. **About 10 S1/s on the laptop**, so train+val is about 60 h and test about 48 h.
+    - **BLK-019 fair comparison (same 20k val S1, same harness):**
+      - D2: R@10/50/200 0.902/0.942/0.959, 9.6 S1/s.
+      - word unigram: 0.925/0.963/0.977, 99.8 S1/s.
+      - word + max_df 0.02: 0.920/0.959/0.974, 446 S1/s.
+      - Word@50 beats D2@200. Mudit to decide the final blocker.
     - **Decision needed (Mudit):**
       - (a) D2 on AWS, fanned out across instances;
       - (b) D2 on a train-S1 subsample for Ashank (val + test stay full);
