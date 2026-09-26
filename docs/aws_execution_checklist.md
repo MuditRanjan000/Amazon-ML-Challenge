@@ -26,7 +26,7 @@
 * **Environment Setup & Dependencies**:
   * **Python Version**: Python 3.10+
   ```bash
-  sudo apt-get update && sudo apt-get install -y python3-venv python3-pip
+  sudo apt-get update && sudo apt-get install -y git python3-venv python3-pip unzip awscli build-essential python3-dev
   python3 -m venv .venv
   source .venv/bin/activate
   pip install -r requirements.txt

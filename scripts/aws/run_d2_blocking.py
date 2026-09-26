@@ -84,6 +84,38 @@ def run_experiment():
     out_path = os.path.join(output_dir, "validation_candidate_pairs.tsv")
     print(f"Saving candidates to {out_path}...")
     candidates.to_csv(out_path, sep="\t", index=False)
+    
+    # Update Metadata
+    import json
+    import subprocess
+    import datetime
+    
+    metadata_path = os.path.join(output_dir, "blocking_metadata.json")
+    if os.path.exists(metadata_path):
+        with open(metadata_path, "r") as f:
+            metadata = json.load(f)
+    else:
+        metadata = {
+             "experiment_id": "EXP-002B-stage2",
+             "blocker": "tfidf_partitioned",
+             "fields": v['fields'],
+             "ngram_range": list(v['ngrams']),
+             "top_k": 200,
+             "validation_split": "frozen"
+        }
+        
+    try:
+        commit_hash = subprocess.getoutput('git rev-parse HEAD').strip()
+    except Exception:
+        commit_hash = "unknown"
+        
+    metadata["generator_commit"] = commit_hash
+    metadata["generated_at"] = datetime.datetime.now().isoformat()
+    
+    with open(metadata_path, "w") as f:
+        json.dump(metadata, f, indent=1)
+    
+    print(f"Updated metadata at {metadata_path}")
         
     print(f"Total Time: {total_time:.2f}s | K=200 Recall: {results.get('recall_at_200', 0):.4f}")
 
