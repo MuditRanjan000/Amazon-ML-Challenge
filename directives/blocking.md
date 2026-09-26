@@ -1,7 +1,20 @@
 # Directive: Candidate Generation / Blocking
 
 **Owner:** Aayush • **Consumers:** Ashank (matching), Mudit (integration, `candidate_pairs.tsv`)
-**Status:** v0: contract proposed, pending sign-off. No blocking config is frozen yet.
+**Status (2026-09-26):** the team blocker is **D2** (Mudit's decision): country-partitioned TF-IDF, `business_name + business_address`, **char_wb (3,5)**, min_df 2, top-200. Train, val and test candidates all come from `scripts/aws/run_d2_blocking.py` with that one pinned config. The parquet contract below was superseded by TSV `artifacts/blocking/{train,validation,test}_candidate_pairs.tsv` (`source1_entity_id, candidate_entity_id, score, rank`), with per-split config hash, commit, TSV sha256 and metrics in `artifacts/blocking/blocking_metadata.json`.
+
+### D2 generator
+- `python scripts/aws/run_d2_blocking.py --split trainval` → train + validation TSVs from one index/run. `--split test` → test TSV (test S2+S3 index, same config). `--sample N` → val-only timing/recall check, writes no TSV. `--blocker d2|word|word_maxdf02` picks a pinned config (default d2). `--in-memory` on a ≥64 GB box; otherwise the index is sharded to disk under `ER_CACHE_DIR/tfidf_index/<config+data hash>/` and reused.
+- The script refuses to write artifacts from a dirty tree: commit and push first.
+- **Measured (BLK-018, 5k val S1 vs the full 10.3M index, laptop):** R@10 0.900 / R@50 0.940 / R@200 0.957, ceiling F0.5@200 0.984, 0 S1 without candidates. Index build 7 min, 1.41B nnz, 11 GB. **About 10 queries/s** (char (3,5) n-grams hit posting lists covering 18–26% of the partition). Train+val is about 60 h and test about 48 h on the laptop, so full runs need AWS fan-out.
+- Bugs fixed on 2026-09-26 in the version merged on `feature/mudit-submission`:
+  - It ran **word** (3,5)-grams: `analyzer` was never passed, and the default was `word`. A typo pair scores cosine 0.0 under word vs 0.58 under char_wb.
+  - It built one Python dict per pair: 353M on train, so OOM.
+  - `ER_N_JOBS` was ignored.
+  - A stale cache keyed only by "D2" was silently reused.
+  - `max_df`/`strip_legal` were silently ignored.
+  - Test-gaming mocks lived in library code.
+  - Split CSVs failed the manifest SHA on Linux checkouts (LF vs CRLF; fixed by `.gitattributes`).
 
 ## Goal
 For every Source-1 entity, produce a candidate set of S2/S3 records that contains its true matches (high **oracle-ceiling F0.5**) while staying small enough for the matcher to score, and for the matcher to avoid false merges.
@@ -45,7 +58,7 @@ Choose the **knee** of the ceiling-vs-pairs curve, not the maximum K.
 |---|---|
 | `execution/run_blocking_eval.py` | **ready**: any method, direction and config on the frozen val split (`--sample N` for dev). Logs to `experiments/results/experiments.jsonl`; `--save` writes the candidates parquet. |
 | `execution/profile_blocking.py` | to build: country agreement, field survival (GT structure already measured, see below) |
-| `execution/run_blocking.py` | to build: frozen config → train/val/test parquet + sidecar |
+| `scripts/aws/run_d2_blocking.py` | **ready**: frozen D2 config → train/val/test TSV + per-split metadata |
 | `execution/check_candidates.py` | to build: gates G1–G5 |
 
 Library: `entity_resolution.blocking` provides `TfidfBlocker` (fit/query, forward), `reverse_candidates`, `ExactNameBlocker`, `union_candidates`, and `BlockingEvaluator` (recall@K, ceiling F0.5, coverage, buckets).
@@ -62,6 +75,8 @@ Library: `entity_resolution.blocking` provides `TfidfBlocker` (fit/query, forwar
 | ↳ + `--max-df 0.05` | 155 | 0.912 | 0.956 | 0.973 | 0.984 | 0.991 |
 | ↳ + `--max-df 0.02` (recommended for dev loops) | 334 | 0.909 | 0.956 | 0.972 | 0.984 | 0.991 |
 | ↳ + `--max-df 0.01` | 572 | 0.907 | 0.954 | 0.971 | 0.984 | 0.990 |
+
+These rows were measured with the pre-2026-09-26 `TfidfBlocker`: global IDF with sublinear tf. The current class uses exact per-country IDF, linear tf, and D2-compatible `min_df`. Re-measure before reusing a number.
 
 Word-level `max_df` is nearly free (common words like road/street/pvt carry no identity), unlike char n-gram pruning. **Decide the final max_df on the full val split before freezing.**
 
