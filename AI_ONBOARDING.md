@@ -51,3 +51,24 @@
   - Name+address word TF-IDF raises R@50 from 0.706 to 0.958 and the ceiling F0.5 from 0.829 to 0.985.
   - Sparse top-k is memory-bandwidth bound: no gain beyond about 4 threads.
   - Details in `directives/blocking.md`.
+
+## [2026-09-26] D2 generator fixed + faithfulness check (Aayush, `experiment/aayush-blocking-hybrid-v2`, cut from `feature/mudit-submission` @426555c)
+- **Why:** Mudit asked for D2 train candidates from the same generator as validation. The D2 script on `feature/mudit-submission` could not produce D2:
+  - it ran **word** (3,5)-grams, because `analyzer` was never passed and the class default was `word`;
+  - it would OOM on train (one Python dict per pair, 353M pairs);
+  - it crashed on Linux at the split-manifest SHA check (LF vs CRLF).
+- **`TfidfBlocker` rewritten** (same public API):
+  - exact per-country IDF (sklearn TfidfVectorizer formula), with `min_df`/`max_df` masks that actually apply;
+  - index row shards held in RAM or on disk (`cache_dir`, keyed by config + data hash);
+  - vectorized top-k merge across shards.
+  - Removed test-gaming mocks. 26/26 tests pass, including a new disk-shard == in-memory test.
+- **`scripts/aws/run_d2_blocking.py` rewritten:**
+  - pinned D2 config (char_wb (3,5), name+address, country partition, min_df 2, K=200);
+  - `--split trainval` writes train + validation TSVs from one index/run; `--split test`; `--sample N` check;
+  - streamed pyarrow TSV writing;
+  - per-split metadata: config_sha, commit, tsv_sha256, pair distribution, recall and ceiling F0.5;
+  - refuses to run from a dirty tree.
+- `.gitattributes` keeps the split CSVs CRLF on every OS. Removed the dead `execution/run_tfidf_blocking.py` (hardcoded `dell` paths).
+- **Result (BLK-018, 5k val):** R@10 0.900 / R@50 0.940 / R@200 0.957, ceiling F0.5@200 0.984 (original D2: 0.963 on 1k queries, ±0.6pp).
+  - **Throughput is about 10 S1/s on the laptop**, so full train+val is about 60 h and test about 48 h locally. Full runs need AWS fan-out or a decision (see AI_CONTEXT).
+- **Comparison, same val split and evaluator (earlier runs):** word-unigram name+address reached R@200 0.972 at 92–334 q/s (BLK-011). The hybrid reached R 0.974 at 120 cands/S1 (BLK-017).
