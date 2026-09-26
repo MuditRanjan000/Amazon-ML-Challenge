@@ -1,10 +1,10 @@
 #!/bin/bash
 # EC2 user-data for blocking fan-out (Amazon Linux 2023). Placeholders are filled at launch:
-#   __MODE__ part|merge   __PART__ i   __N__ n   __BUCKET__   __RUN__ (s3 prefix)   __COMMIT__
-# part : run_d2_blocking.py --split trainval --blocker word --part i/n, upload parts/, terminate.
+#   __MODE__ part|merge   __SPLIT__ trainval|test   __EXP__ experiment id   __PART__ i   __N__ n   __BUCKET__   __RUN__ (s3 prefix)   __COMMIT__
+# part : run_d2_blocking.py --split <split> --blocker word --part i/n, upload parts/, terminate.
 # merge: download all parts, --merge n, upload final TSVs (+ .gz) + metadata + sample, terminate.
 # The instance is launched with shutdown-behavior=terminate: every exit path ends in `shutdown`.
-MODE=__MODE__; PART=__PART__; N=__N__; BUCKET=__BUCKET__; RUN=__RUN__; COMMIT=__COMMIT__
+MODE=__MODE__; SPLIT=__SPLIT__; EXP=__EXP__; PART=__PART__; N=__N__; BUCKET=__BUCKET__; RUN=__RUN__; COMMIT=__COMMIT__
 S3=s3://$BUCKET/$RUN
 TAG=$([ "$MODE" = merge ] && echo merge || printf 'part%02d' "$PART")
 LOG=/var/log/blocking.log
@@ -40,21 +40,22 @@ export ER_DATA_DIR=/opt/data/dataset ER_OUTPUT_DIR=/opt/out ER_CACHE_DIR=/opt/ou
 echo "== env ready $(date -u +%FT%TZ)"
 
 if [ "$MODE" = part ]; then
-  aws s3 cp s3://$BUCKET/data/train_parquet.tar - | tar -x -C /opt  # parquet cache + mtime-old TSV placeholders: no TSV parse
-  .venv/bin/python scripts/aws/run_d2_blocking.py --split trainval --blocker word --in-memory \
-      --part "$PART/$N" --batch 50000 --exp-id BLK-020
+  DATA=$([ "$SPLIT" = test ] && echo test || echo train)
+  aws s3 cp s3://$BUCKET/data/${DATA}_parquet.tar - | tar -x -C /opt  # parquet cache + mtime-old TSV placeholders: no TSV parse
+  .venv/bin/python scripts/aws/run_d2_blocking.py --split "$SPLIT" --blocker word --in-memory \
+      --part "$PART/$N" --batch 50000 --exp-id "$EXP"
   free -m
   aws s3 cp artifacts/blocking/parts/ $S3/parts/ --recursive --only-show-errors
 else
   aws s3 cp $S3/parts/ artifacts/blocking/parts/ --recursive --only-show-errors
-  .venv/bin/python scripts/aws/run_d2_blocking.py --merge "$N" --exp-id BLK-020
+  .venv/bin/python scripts/aws/run_d2_blocking.py --merge "$N" --exp-id "$EXP"
   dnf install -y -q pigz
-  for f in train_candidate_pairs.tsv validation_candidate_pairs.tsv; do pigz -k -1 artifacts/blocking/$f; done
-  for f in train_candidate_pairs.tsv train_candidate_pairs.tsv.gz validation_candidate_pairs.tsv \
-           validation_candidate_pairs.tsv.gz train_sample_candidate_pairs.tsv train_sample_s1_ids.csv \
-           blocking_metadata.json; do
-    aws s3 cp artifacts/blocking/$f $S3/final/$f --only-show-errors
+  cd artifacts/blocking
+  for f in *_candidate_pairs.tsv; do [ "$f" = train_sample_candidate_pairs.tsv ] || pigz -k -1 "$f"; done
+  for f in *_candidate_pairs.tsv *_candidate_pairs.tsv.gz train_sample_s1_ids.csv blocking_metadata.json; do
+    if [ -f "$f" ]; then aws s3 cp "$f" $S3/final/$f --only-show-errors; fi
   done
-  aws s3 cp experiments/results/experiments.jsonl $S3/final/experiments_blk020.jsonl --only-show-errors
+  cd /opt/repo
+  aws s3 cp experiments/results/experiments.jsonl $S3/final/experiments.jsonl --only-show-errors
 fi
 finish DONE

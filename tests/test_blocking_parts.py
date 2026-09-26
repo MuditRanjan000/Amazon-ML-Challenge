@@ -57,6 +57,20 @@ def test_parts_merge_is_byte_identical_to_single_run(tmp_path):
     assert json.loads((tmp_path / "n3" / "blocking_metadata.json").read_text())["top_k"] == d2.K
 
 
+def test_test_split_without_ground_truth_merges(tmp_path):
+    pool = _frame("P", NAMES, ["US"] * 4 + ["France"] * 4)
+    s1 = _frame("S", NAMES, ["US"] * 4 + ["France"] * 4)
+    blocker = TfidfBlocker(**{**d2.BLOCKERS["word"], "min_df": 1}, n_jobs=1).fit(pool)
+    base = {"blocker": "word", "config": blocker.config, "config_sha": "cfg", "generator_commit": "abc",
+            "generated_at": "t", "load_s": 0.0, "index_s": 0.0}
+    (tmp_path / "parts").mkdir()
+    for i in (1, 2):
+        d2.run_part(blocker, "test", d2.part_slice(s1, i, 2), None, 3, tmp_path / "parts" / f"test.part{i:02d}of02", base)
+    rec = d2.merge_parts(tmp_path, 2, "TEST", log=False)["splits"]["test"]
+    assert rec["n_s1"] == 8 and rec["no_candidates"] == 0 and "recall_at_200" not in rec
+    assert set(rec["by_country"]) == {"US", "France"} and "sample" not in rec
+
+
 def test_merge_refuses_missing_part(tmp_path):
     (tmp_path / "parts").mkdir()
     (tmp_path / "parts" / "train.part01of02.json").write_text("{}")
