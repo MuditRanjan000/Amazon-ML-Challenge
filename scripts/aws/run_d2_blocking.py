@@ -101,6 +101,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--split", choices=["trainval", "test"], required=True)
     p.add_argument("--sample", type=int, default=0, help="only N random val S1, metrics only (no TSV)")
+    p.add_argument("--train-sample", type=int, default=0, help="only N random train S1")
+    p.add_argument("--write-sample", action="store_true", help="write TSV even if sampling")
     p.add_argument("--in-memory", action="store_true", help="keep the index in RAM (needs ~25 GB peak)")
     p.add_argument("--batch", type=int, default=250_000, help="S1 per query batch / TSV write")
     p.add_argument("--exp-id", default="EXP-002B-stage2")
@@ -108,7 +110,7 @@ def main():
     a = p.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     commit = git_commit()
-    if commit.endswith("-dirty") and not a.sample:
+    if commit.endswith("-dirty") and not (a.sample or a.train_sample):
         raise SystemExit(f"working tree is dirty ({commit}): commit + push first so the artifacts are reproducible")
     t0 = time.time()
 
@@ -123,11 +125,15 @@ def main():
     else:
         gt = loader.load_ground_truth()
         train_ids, val_ids = create_validation_split(gt)
-        if a.sample:
+        if a.train_sample:
+            train_ids = set(random.Random(config.SEED).sample(sorted(train_ids), a.train_sample))
+            jobs.append(("train_sample", s1[s1["entity_id"].isin(train_ids)]))
+        elif a.sample:
             val_ids = set(random.Random(config.SEED).sample(sorted(val_ids), a.sample))
+            jobs.append(("validation", s1[s1["entity_id"].isin(val_ids)]))
         else:
             jobs.append(("train", s1[s1["entity_id"].isin(train_ids)]))
-        jobs.append(("validation", s1[s1["entity_id"].isin(val_ids)]))
+            jobs.append(("validation", s1[s1["entity_id"].isin(val_ids)]))
 
     t_index = time.time()
     blocker = TfidfBlocker(**BLOCKERS[a.blocker], n_jobs=config.N_JOBS,
@@ -146,7 +152,8 @@ def main():
 
     for name, frame in jobs:
         t1 = time.time()
-        out_path = None if a.sample else OUT_DIR / f"{name}_candidate_pairs.tsv"
+        is_sample = (name == "train_sample") or (a.sample and name == "validation")
+        out_path = None if is_sample and not a.write_sample else OUT_DIR / f"{name}_candidate_pairs.tsv"
         n_cand, metrics = generate(blocker, frame, gt, out_path, a.batch)
         record = {"blocker": a.blocker, "config": blocker.config, "config_sha": config_sha,
                   "generator_commit": commit, "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
