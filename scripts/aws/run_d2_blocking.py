@@ -239,8 +239,9 @@ def main():
 
     loader = DataLoader()
     data_split = "test" if a.split == "test" else "train"
-    s1 = loader.load_source(data_split, 1)
-    pool = loader.load_candidates_pool(data_split, columns=["entity_id", "country"] + D2["text_fields"])
+    columns = ["entity_id", "country"] + D2["text_fields"]  # only what blocking reads: 8 GB free-plan boxes
+    s1 = loader.load_source(data_split, 1, columns=columns)
+    pool = loader.load_candidates_pool(data_split, columns=columns)
     load_s = time.time() - t0
     gt, jobs = None, []
     if a.split == "test":
