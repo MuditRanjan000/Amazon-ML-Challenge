@@ -1,5 +1,9 @@
 # Datasets and Resources
-6ab10eb3b23ba_student_resource/
+/6ab10eb3b23ba_student_resource/
+/student_resource/
+/dataset/
+/data/*
+!/data/README.md
 *.pdf
 *.tsv
 *.csv
@@ -10,17 +14,17 @@
 !artifacts/validation_split/*.csv
 !artifacts/validation_split/*.json
 
-dataset/
-output/
-models/
+/output/
+/models/
 
 # Intermediate and Temporary files
 .tmp/
-scratch_*.py
-test_*.py
+/scratch_*.py
 
 # Credentials and Configs
 .env
+.env.*
+!.env.example
 credentials.json
 token.json
 *.pem
