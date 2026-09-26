@@ -3,6 +3,25 @@
 **Owner:** Aayush • **Consumers:** Ashank (matching), Mudit (integration, `candidate_pairs.tsv`)
 **Status (2026-09-26):** the team blocker is **D2** (Mudit's decision): country-partitioned TF-IDF, `business_name + business_address`, **char_wb (3,5)**, min_df 2, top-200. Train, val and test candidates all come from `scripts/aws/run_d2_blocking.py` with that one pinned config. The parquet contract below was superseded by TSV `artifacts/blocking/{train,validation,test}_candidate_pairs.tsv` (`source1_entity_id, candidate_entity_id, score, rank`), with per-split config hash, commit, TSV sha256 and metrics in `artifacts/blocking/blocking_metadata.json`.
 
+### FROZEN: word unigram (BLK-020, 2026-09-26)
+- **Final blocker:** `--blocker word` (now the script default), config_sha `657f59868e58`: country-partitioned TF-IDF on name+address, word unigrams, min_df 2, K=200. Chosen by Mudit after BLK-019.
+- **BLK-020, full frozen split, commit `69a91f1`:**
+
+  | split | S1 | pairs | R@10 / R@50 / R@200 | ceiling@200 |
+  |---|---|---|---|---|
+  | train | 1,765,456 | 353,091,200 | 0.9250 / 0.9630 / 0.9780 | 0.9923 |
+  | validation | 441,365 | 88,273,000 | 0.9248 / 0.9628 / 0.9779 | 0.9921 |
+
+  200 candidates for every S1; 0 without candidates. Files: `s3://amazon-ml-2026-blocking-716522590518/run-69a91f1/final/`. Report: `artifacts/blocking/blocking_report.md`.
+- **Fan-out:** `--part i/n` (contiguous slices, so the merge is byte-identical to one run) + `--merge n` (verifies parts, recomputes metrics and distribution, writes a seed-42 2,500-S1 train sample + ID manifest). EC2 user-data: `scripts/aws/blocking_instance.sh` (modes part|merge; S3 status markers and logs; self-terminates; 2 h cap).
+- **AWS learnings (account on the FREE plan):**
+  - Only free-tier-eligible types can launch. The best is **m7i-flex.large (2 vCPU, 8 GB)**; r6i/r7i are rejected.
+  - The job OOMs in 8 GB without swap. It needs the 8 GB swap file + loading only 4 S1 columns + shipping the parquet cache (TSV placeholders dated 2000-01-01).
+  - m7i-flex.large runs ~83 S1/s; index build ~3 min.
+  - vCPU quota: 64 on-demand + 32 spot (Standard family). Terminated instances keep counting against it until fully gone, so retry launches.
+  - Run cost: 48 workers × ~18 min + merge ≈ $1.5 of credits.
+  - Git Bash mangles `/dev/...` and `/aws/...` CLI args: pass block-device mappings via `file://` JSON.
+
 ### D2 generator
 - `python scripts/aws/run_d2_blocking.py --split trainval` → train + validation TSVs from one index/run. `--split test` → test TSV (test S2+S3 index, same config). `--sample N` → val-only timing/recall check, writes no TSV. `--blocker d2|word|word_maxdf02` picks a pinned config (default d2). `--in-memory` on a ≥64 GB box; otherwise the index is sharded to disk under `ER_CACHE_DIR/tfidf_index/<config+data hash>/` and reused.
 - The script refuses to write artifacts from a dirty tree: commit and push first.

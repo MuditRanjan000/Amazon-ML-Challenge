@@ -51,6 +51,11 @@ A 20% validation split on `source1_entity_id` is strictly enforced and frozen to
       - (b) D2 on a train-S1 subsample for Ashank (val + test stay full);
       - (c) switch to word-unigram name+address (R@200 0.972, 10–30x faster; re-measure with the new class first).
 
+# Blocking — FINAL (BLK-020, 2026-09-26)
+- Frozen blocker: word unigram, name+address, country partition, min_df 2, K=200 (config_sha 657f59868e58, commit 69a91f1).
+- Train: 353,091,200 pairs, R@200 0.97795. Validation: 88,273,000 pairs, R@200 0.9779, ceiling F0.5 0.99213.
+- Files in `s3://amazon-ml-2026-blocking-716522590518/run-69a91f1/final/`; see `artifacts/blocking/blocking_report.md`. Test candidates pending the IDF-on-test ruling.
+
 # Experiment Results
 - **EXP-001:** F0.5 = 0.19372. Baseline confirms need for fuzzy matching and blocking.
 - **EXP-002:** Aborted. Computing non-partitioned sparse-matrix dot products for 10.3M rows proved computationally non-viable for rapid iteration without an AWS cluster.

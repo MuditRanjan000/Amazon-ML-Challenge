@@ -1,13 +1,159 @@
 {
- "experiment_id": "EXP-002B-stage2",
- "blocker": "tfidf_partitioned",
- "fields": [
-   "business_name",
-   "business_address"
- ],
- "ngram_range": [3,5],
+ "splits": {
+  "train": {
+   "blocker": "word",
+   "config": {
+    "text_fields": [
+     "business_name",
+     "business_address"
+    ],
+    "ngram_range": [
+     1,
+     1
+    ],
+    "analyzer": "word",
+    "n_features": 4194304,
+    "partition_by_country": true,
+    "strip_legal": false,
+    "min_df": 2,
+    "max_df": 1.0
+   },
+   "config_sha": "657f59868e58",
+   "generator_commit": "69a91f1",
+   "generated_at": "2026-09-26T12:43:07",
+   "parts": 48,
+   "index_s": 185.1,
+   "query_s": 588.9,
+   "n_s1": 1765456,
+   "total_pairs": 353091200,
+   "no_candidates": 0,
+   "p50_cand": 200.0,
+   "p95_cand": 200.0,
+   "p99_cand": 200.0,
+   "max_cand": 200,
+   "avg_cand_at_10": 10.0,
+   "total_pairs_at_10": 17654560,
+   "avg_cand_at_25": 25.0,
+   "total_pairs_at_25": 44136400,
+   "avg_cand_at_50": 50.0,
+   "total_pairs_at_50": 88272800,
+   "avg_cand_at_100": 100.0,
+   "total_pairs_at_100": 176545600,
+   "avg_cand_at_200": 200.0,
+   "total_pairs_at_200": 353091200,
+   "by_country": {
+    "India": {
+     "n_s1": 706409,
+     "avg_cand": 200.0,
+     "no_candidates": 0
+    },
+    "US": {
+     "n_s1": 1059047,
+     "avg_cand": 200.0,
+     "no_candidates": 0
+    }
+   },
+   "recall_at_10": 0.92501,
+   "ceiling_f05_at_10": 0.97325,
+   "full_coverage_at_10": 0.79517,
+   "recall_at_25": 0.95148,
+   "ceiling_f05_at_25": 0.98248,
+   "full_coverage_at_25": 0.86236,
+   "recall_at_50": 0.96295,
+   "ceiling_f05_at_50": 0.98667,
+   "full_coverage_at_50": 0.89289,
+   "recall_at_100": 0.97129,
+   "ceiling_f05_at_100": 0.98979,
+   "full_coverage_at_100": 0.91545,
+   "recall_at_200": 0.97795,
+   "ceiling_f05_at_200": 0.99225,
+   "full_coverage_at_200": 0.93398,
+   "tsv": "artifacts/blocking/train_candidate_pairs.tsv",
+   "tsv_sha256": "e3bd1d765910f66dee555a3c4f10c02ea77ec3b6efbfee64ee0ef34f134330e2",
+   "sample": {
+    "s1": 2500,
+    "pairs": 500000,
+    "seed": 42,
+    "tsv": "train_sample_candidate_pairs.tsv",
+    "tsv_sha256": "7a2232bda229508a4bf9219f147c6bc07c29419d3e27460710576cb3d2b8f108",
+    "ids_csv": "train_sample_s1_ids.csv",
+    "ids_sha256": "77583451c11f48558b5ba31c32248d563f036ac95da481d46d3fda38a9972b24"
+   }
+  },
+  "validation": {
+   "blocker": "word",
+   "config": {
+    "text_fields": [
+     "business_name",
+     "business_address"
+    ],
+    "ngram_range": [
+     1,
+     1
+    ],
+    "analyzer": "word",
+    "n_features": 4194304,
+    "partition_by_country": true,
+    "strip_legal": false,
+    "min_df": 2,
+    "max_df": 1.0
+   },
+   "config_sha": "657f59868e58",
+   "generator_commit": "69a91f1",
+   "generated_at": "2026-09-26T12:43:07",
+   "parts": 48,
+   "index_s": 185.1,
+   "query_s": 142.5,
+   "n_s1": 441365,
+   "total_pairs": 88273000,
+   "no_candidates": 0,
+   "p50_cand": 200.0,
+   "p95_cand": 200.0,
+   "p99_cand": 200.0,
+   "max_cand": 200,
+   "avg_cand_at_10": 10.0,
+   "total_pairs_at_10": 4413650,
+   "avg_cand_at_25": 25.0,
+   "total_pairs_at_25": 11034125,
+   "avg_cand_at_50": 50.0,
+   "total_pairs_at_50": 22068250,
+   "avg_cand_at_100": 100.0,
+   "total_pairs_at_100": 44136500,
+   "avg_cand_at_200": 200.0,
+   "total_pairs_at_200": 88273000,
+   "by_country": {
+    "India": {
+     "n_s1": 176779,
+     "avg_cand": 200.0,
+     "no_candidates": 0
+    },
+    "US": {
+     "n_s1": 264586,
+     "avg_cand": 200.0,
+     "no_candidates": 0
+    }
+   },
+   "recall_at_10": 0.92481,
+   "ceiling_f05_at_10": 0.97312,
+   "full_coverage_at_10": 0.79455,
+   "recall_at_25": 0.95133,
+   "ceiling_f05_at_25": 0.98239,
+   "full_coverage_at_25": 0.86206,
+   "recall_at_50": 0.96281,
+   "ceiling_f05_at_50": 0.98657,
+   "full_coverage_at_50": 0.89265,
+   "recall_at_100": 0.97123,
+   "ceiling_f05_at_100": 0.98966,
+   "full_coverage_at_100": 0.91546,
+   "recall_at_200": 0.9779,
+   "ceiling_f05_at_200": 0.99213,
+   "full_coverage_at_200": 0.93399,
+   "tsv": "artifacts/blocking/validation_candidate_pairs.tsv",
+   "tsv_sha256": "906fc126ece79a5665f2037c2127855862648c87bdb5f1133b5d55ef7dddf87c"
+  }
+ },
+ "blocker": "word: TfidfBlocker {'text_fields': ['business_name', 'business_address'], 'ngram_range': [1, 1], 'analyzer': 'word', 'n_features': 4194304, 'partition_by_country': True, 'strip_legal': False, 'min_df': 2, 'max_df': 1.0}",
+ "generator": "scripts/aws/run_d2_blocking.py",
  "top_k": 200,
- "validation_split": "frozen",
- "generator_commit": "",
- "generated_at": ""
+ "validation_split": "frozen (manifest-verified)"
 }
