@@ -1,0 +1,13 @@
+{
+ "experiment_id": "EXP-002B-stage2",
+ "blocker": "tfidf_partitioned",
+ "fields": [
+   "business_name",
+   "business_address"
+ ],
+ "ngram_range": [3,5],
+ "top_k": 200,
+ "validation_split": "frozen",
+ "generator_commit": "",
+ "generated_at": ""
+}
