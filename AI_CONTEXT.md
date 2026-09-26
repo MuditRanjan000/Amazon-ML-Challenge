@@ -39,7 +39,7 @@ A 20% validation split on `source1_entity_id` is strictly enforced and frozen to
       - word + max_df 0.02: 0.920/0.959/0.974, 446 S1/s.
       - Word@50 beats D2@200.
     - **Decision (Mudit)**: The D2 comparison is complete (metrics source: BLK-019). The final selected blocker is **word unigram** (name+address, K=200). `char_wb` (D2) has been retired.
-    - **BLK-020 Handoff**: Aayush delivered the final blocker artifacts (`train_candidate_pairs.tsv.gz` and `validation_candidate_pairs.tsv.gz`) and metadata. Redundant AWS generation scripts have been purged, and a verification handoff script (`scripts/verify_blk020_handoff.py`) has been added to the repository.
+    - **BLK-020 Handoff**: Aayush delivered the final blocker artifacts (`train_candidate_pairs.tsv.gz` and `validation_candidate_pairs.tsv.gz`) and metadata. Redundant AWS generation scripts have been purged, and a verification handoff script (`scripts/verify_blk020_handoff.py`) has been added to the repository. The low-memory streaming verification pipeline confirmed exactly 353,091,200 train pairs and 88,273,000 validation pairs with exactly 0 duplicates. The validation set perfectly matches the 441,365 unique S1 IDs required by the frozen manifest. Handoff to Ashank is complete.
 
 # Blocking — FINAL (BLK-020, 2026-09-26)
 - Frozen blocker: word unigram, name+address, country partition, min_df 2, K=200 (config_sha 657f59868e58, commit 69a91f1).

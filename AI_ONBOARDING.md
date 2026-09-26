@@ -102,3 +102,11 @@
   - The first launch OOMed because `mkswap -q` is invalid on AL2023.
   - Local commit `187d955` referenced by Ashank was never pushed. The BLK-020 sample reproduces its reported R@200 exactly.
 - **Next:** test candidates (`--split test --blocker word`), pending Mudit's ruling on fitting IDF on test data. Choose the final K on validation via `rank <= K`.
+
+## [2026-09-26] BLK-020 Handoff & Pipeline Verification (Mudit, `feature/mudit-submission`)
+- **Artifact Validation:** Extracted Ayush's final `BLK-020` artifacts (`train_candidate_pairs.tsv.gz` 5.16GB, `validation_candidate_pairs.tsv.gz` 1.29GB).
+- **OOM Prevention:** Rewrote `scripts/verify_blk020_handoff.py` from a Pandas loader into an aggressive low-memory streaming generator. 
+- **Verification Results:** Successfully parsed 441M+ rows. 
+  - Train: 353,091,200 rows, 1,765,456 unique S1, 0 duplicates.
+  - Validation: 88,273,000 rows, 441,365 unique S1 (Matches frozen validation manifest exactly!), 0 duplicates.
+- **Merge & Sync:** Merged Ayush's PR (#7) `experiment/aayush-blocking-hybrid-v2` into `feature/mudit-submission`, resolving metadata lineage conflicts to lock in `word` blocker (`657f59868e58`). Tests passed. Code is clean and handoff is fully prepared for Ashank.
