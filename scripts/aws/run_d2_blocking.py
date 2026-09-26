@@ -6,11 +6,11 @@ import gc
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-from src.entity_resolution import config
-from src.entity_resolution.data.loader import DataLoader
-from src.entity_resolution.data.validation_split import create_validation_split, apply_validation_split
-from src.entity_resolution.blocking.tfidf_blocking import TfidfBlocker
-from src.entity_resolution.blocking.evaluator import BlockingEvaluator
+from entity_resolution import config
+from entity_resolution.data.loader import DataLoader
+from entity_resolution.data.validation_split import create_validation_split, apply_validation_split
+from entity_resolution.blocking.tfidf_blocking import TfidfBlocker
+from entity_resolution.blocking.evaluator import BlockingEvaluator
 
 def run_experiment():
     print("Initializing AWS D2 Blocking Experiment...")
