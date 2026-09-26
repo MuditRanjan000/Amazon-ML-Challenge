@@ -33,7 +33,7 @@ def test_sparse_topk_matches_brute_force_cosine():
     blocker = _blocker(partition_by_country=False).fit(index)
     got = blocker.query(queries, k=3)
     # brute force with the same vectors
-    iv, qv = blocker.vectors(index), blocker.vectors(queries)
+    iv, qv = blocker.vectors(index), blocker.vectors(queries)  # partition "" (no country split)
     sim = cosine_similarity(qv, iv)
     for qi, qid in enumerate(queries["entity_id"]):
         expect = [index["entity_id"][j] for j in np.argsort(-sim[qi])[:3] if sim[qi, j] > 0]
@@ -50,9 +50,23 @@ def test_max_df_prunes_common_ngrams_but_keeps_best_match():
     index = _records("S2", NAMES[1::2] + ["acme"] * 20)  # make acme n-grams very common
     full = _blocker(partition_by_country=False).fit(index)
     pruned = _blocker(partition_by_country=False, max_df=0.3).fit(index)
-    assert pruned.partitions[""][1].nnz < full.partitions[""][1].nnz
+    assert pruned.nnz < full.nnz
     top = pruned.query(_records("S1", ["zenith labs"]), k=1)
     assert list(top["index_entity_id"].astype(str)) == ["S2-2"]
+
+
+def test_disk_shards_match_single_in_memory_shard(tmp_path):
+    index = pd.concat([_records("S2", NAMES[1::2], "US"), _records("S3", NAMES[0::2], "India")], ignore_index=True)
+    queries = pd.concat([_records("S1", NAMES[0::2], "US"), _records("Q", NAMES[1::2], "India")], ignore_index=True)
+    want = _blocker().fit(index).query(queries, k=4)
+    sharded = _blocker(shard_size=2, cache_dir=tmp_path, chunk_size=3)
+    got = sharded.fit(index).query(queries, k=4)
+    assert len(list(tmp_path.rglob("*.npz"))) > 2
+    cols = ["query_entity_id", "index_entity_id"]
+    assert got[cols].astype(str).equals(want[cols].astype(str))
+    assert np.allclose(got["score"], want["score"]) and (got["rank"] == want["rank"]).all()
+    again = _blocker(shard_size=2, cache_dir=tmp_path, chunk_size=3).fit(index)  # served from the cache
+    assert again.query(queries, k=4)[cols].astype(str).equals(want[cols].astype(str))
 
 
 def test_unseen_country_still_gets_candidates():
