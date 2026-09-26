@@ -1,0 +1,38 @@
+[    6s] loaded; building name_key for 2206821 S1 and 10320219 pool records
+[   46s] name_key done
+[   62s] word@200 of cost sample loaded: 1000000
+[  112s] fwd name_key index built
+[  453s] fwd_nk@10: recovers 15.71% of misses, +6.3 new cands/S1
+[  806s] fwd_nk@25: recovers 20.36% of misses, +19.5 new cands/S1
+[ 1143s] fwd_nk@50: recovers 24.81% of misses, +42.7 new cands/S1
+[ 1467s] fwd_nk@100: recovers 30.31% of misses, +90.4 new cands/S1
+[ 1577s] rev_word@1: recovers 6.78% of misses, <= +4.7 cands/S1
+[ 1577s] rev_word@3: recovers 12.24% of misses, <= +14.0 cands/S1
+[ 1577s] rev_word@5: recovers 15.58% of misses, <= +23.4 cands/S1
+[ 1577s] rev_word@10: recovers 21.32% of misses, <= +46.8 cands/S1
+[ 1718s] rev_nk@1: recovers 16.67% of misses, <= +4.7 cands/S1
+[ 1718s] rev_nk@3: recovers 23.62% of misses, <= +14.0 cands/S1
+[ 1718s] rev_nk@5: recovers 26.31% of misses, <= +23.3 cands/S1
+[ 1718s] rev_nk@10: recovers 30.34% of misses, <= +46.7 cands/S1
+
+BASE word@200 ceiling 0.99213
+        channel(s) added to word@200  misses recovered  val ceiling  ~new cands/S1 (<=)
+                           fwd_nk@10           0.15708      0.99325                 6.3
+                           fwd_nk@25           0.20356      0.99358                19.5
+                           fwd_nk@50           0.24806      0.99396                42.7
+                          fwd_nk@100           0.30310      0.99442                90.4
+                          rev_word@1           0.06777      0.99270                 4.7
+                          rev_word@3           0.12245      0.99317                14.0
+                          rev_word@5           0.15581      0.99345                23.4
+                         rev_word@10           0.21316      0.99392                46.8
+                            rev_nk@1           0.16668      0.99329                 4.7
+                            rev_nk@3           0.23616      0.99378                14.0
+                            rev_nk@5           0.26307      0.99398                23.3
+                           rev_nk@10           0.30336      0.99431                46.7
+              fwd_nk@25 + rev_word@3           0.29395      0.99436                33.5
+              fwd_nk@50 + rev_word@3           0.33208      0.99468                56.7
+   fwd_nk@25 + rev_word@3 + rev_nk@3           0.35123      0.99475                47.5
+   fwd_nk@50 + rev_word@5 + rev_nk@5           0.40905      0.99526                89.4
+  fwd_nk@100 + rev_word@5 + rev_nk@5           0.44224      0.99554               137.1
+fwd_nk@100 + rev_word@10 + rev_nk@10           0.48955      0.99594               183.9
+[ 1719s] done
