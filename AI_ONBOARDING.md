@@ -81,3 +81,24 @@
   - Word unigram: 0.925/0.963/0.977, ceiling 0.992, 99.8 S1/s.
   - Word + max_df 0.02: 0.920/0.959/0.974, ceiling 0.990, 446 S1/s.
 - **Implication:** word beats D2 at every K, and word@50 already exceeds D2@200. Projected train+val runtime on the laptop: D2 ~64 h vs word ~6 h vs word+max_df ~1.4 h.
+
+## [2026-09-26] BLK-020: frozen word-unigram blocker, full train + validation candidates on AWS (Aayush)
+- **Decision (Mudit):** word unigram is the final blocker (BLK-019). `--blocker word` is now the default; config_sha `657f59868e58`.
+- **Code (`0abe61a`, `69a91f1`):**
+  - `--part i/n` + `--merge n` in `scripts/aws/run_d2_blocking.py`. Contiguous slices make the merge byte-identical to a single run (tested in `tests/test_blocking_parts.py`).
+  - The merge also writes a seed-42 2,500-S1 train sample + ID manifest.
+  - `ER_GIT_COMMIT` override in `tracking.git_commit()` for tarball-shipped code.
+  - S1 is loaded with only the 4 columns blocking reads.
+  - `scripts/aws/blocking_instance.sh` is the EC2 user-data. `.gitattributes` pins `*.sh` to LF.
+- **Run:** 48 × m7i-flex.large (32 on-demand + 16 spot) in ap-south-1 plus 1 merge instance, ~25 min wall, ≈ $1.5 of free-plan credits. Everything self-terminated; nothing left running.
+- **Results:**
+  - train: 1,765,456 S1 / 353,091,200 pairs / R@200 0.97795 / ceiling 0.99225.
+  - validation: 441,365 S1 / 88,273,000 pairs / R@200 0.9779 / ceiling 0.99213.
+  - 0 S1 without candidates.
+  - 2,500-S1 sample: R@200 0.97807, which matches the figure Ashank was given.
+- **Artifacts:** `s3://amazon-ml-2026-blocking-716522590518/run-69a91f1/final/` (TSV + .gz, sample, manifest, metadata). Hashes in `artifacts/blocking/blocking_metadata.json`.
+- **Gotchas:**
+  - The free plan only allows free-tier instance types (2 vCPU / ≤ 8 GB), so the job needs swap.
+  - The first launch OOMed because `mkswap -q` is invalid on AL2023.
+  - Local commit `187d955` referenced by Ashank was never pushed. The BLK-020 sample reproduces its reported R@200 exactly.
+- **Next:** test candidates (`--split test --blocker word`), pending Mudit's ruling on fitting IDF on test data. Choose the final K on validation via `rank <= K`.

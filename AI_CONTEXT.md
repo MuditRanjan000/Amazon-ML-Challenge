@@ -41,6 +41,11 @@ A 20% validation split on `source1_entity_id` is strictly enforced and frozen to
     - **Decision (Mudit)**: The D2 comparison is complete (metrics source: BLK-019). The final selected blocker is **word unigram** (name+address, K=200). `char_wb` (D2) has been retired.
     - **BLK-020 Handoff**: Aayush delivered the final blocker artifacts (`train_candidate_pairs.tsv.gz` and `validation_candidate_pairs.tsv.gz`) and metadata. Redundant AWS generation scripts have been purged, and a verification handoff script (`scripts/verify_blk020_handoff.py`) has been added to the repository.
 
+# Blocking — FINAL (BLK-020, 2026-09-26)
+- Frozen blocker: word unigram, name+address, country partition, min_df 2, K=200 (config_sha 657f59868e58, commit 69a91f1).
+- Train: 353,091,200 pairs, R@200 0.97795. Validation: 88,273,000 pairs, R@200 0.9779, ceiling F0.5 0.99213.
+- Files in `s3://amazon-ml-2026-blocking-716522590518/run-69a91f1/final/`; see `artifacts/blocking/blocking_report.md`. Test candidates pending the IDF-on-test ruling.
+
 # Experiment Results
 - **EXP-001:** F0.5 = 0.19372. Baseline confirms need for fuzzy matching and blocking.
 - **EXP-002:** Aborted. Computing non-partitioned sparse-matrix dot products for 10.3M rows proved computationally non-viable for rapid iteration without an AWS cluster.

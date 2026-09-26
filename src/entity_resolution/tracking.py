@@ -4,6 +4,7 @@ JSONL (not CSV) so different experiments can log different fields without
 breaking a header, and every line is self-describing and diff-friendly.
 """
 import json
+import os
 import subprocess
 import sys
 import time
@@ -25,6 +26,8 @@ def peak_rss_gb() -> float:
 
 
 def git_commit() -> str:
+    if os.environ.get("ER_GIT_COMMIT"):  # code shipped without .git (e.g. a tarball on AWS)
+        return os.environ["ER_GIT_COMMIT"]
     try:
         sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=config.REPO_ROOT,
                              capture_output=True, text=True, check=True).stdout.strip()

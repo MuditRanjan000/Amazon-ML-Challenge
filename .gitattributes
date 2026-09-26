@@ -1,2 +1,4 @@
 # Split files are hashed (manifest.json) as CRLF bytes; keep them CRLF on every OS.
 artifacts/validation_split/*.csv text eol=crlf
+# Shell scripts run on Linux (EC2 user-data): never CRLF.
+*.sh text eol=lf
