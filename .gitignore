@@ -8,6 +8,8 @@
 !artifacts/validation_split/
 !artifacts/validation_split/*.csv
 !artifacts/validation_split/*.json
+artifacts/handoff/
+artifacts/blocking/*.tsv
 
 !experiments/results/*.csv
 *.parquet
