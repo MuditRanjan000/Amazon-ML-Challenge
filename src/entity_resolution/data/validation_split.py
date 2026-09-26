@@ -63,3 +63,51 @@ def create_validation_split(ground_truth_df: pd.DataFrame = None, test_size=0.2,
 def apply_validation_split(df: pd.DataFrame, s1_id_col: str, train_ids: set, val_ids: set) -> tuple:
     """Split a frame holding Source-1 IDs into (train_df, val_df)."""
     return df[df[s1_id_col].isin(train_ids)].copy(), df[df[s1_id_col].isin(val_ids)].copy()
+
+
+if __name__ == "__main__":
+    import argparse
+    import sys
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--verify", action="store_true", help="Verify the frozen split without creating it")
+    args = parser.parse_args()
+    
+    if args.verify:
+        split_dir = Path(config.SPLIT_DIR)
+        manifest_path = Path(config.SPLIT_MANIFEST)
+        if not manifest_path.exists():
+            print(f"Manifest not found at {manifest_path}")
+            sys.exit(1)
+        
+        manifest = json.loads(manifest_path.read_text())
+        
+        for part, name in SPLIT_FILES.items():
+            file_path = split_dir / name
+            if not file_path.exists():
+                print(f"Missing {file_path}")
+                sys.exit(1)
+            got, want = _sha256(file_path), manifest[MANIFEST_KEYS[part]]
+            if got != want:
+                print(f"Hash mismatch on {file_path}: got {got}, want {want}")
+                sys.exit(1)
+                
+        train_df = pd.read_csv(split_dir / SPLIT_FILES["train"], dtype=str)
+        val_df = pd.read_csv(split_dir / SPLIT_FILES["val"], dtype=str)
+        
+        train_ids = set(train_df["entity_id"])
+        val_ids = set(val_df["entity_id"])
+        
+        print(f"Train IDs: {len(train_ids)}")
+        print(f"Val IDs: {len(val_ids)}")
+        
+        overlap = train_ids.intersection(val_ids)
+        if overlap:
+            print(f"CRITICAL: Found {len(overlap)} overlapping IDs!")
+            sys.exit(1)
+            
+        print("Validation split verified successfully.")
+        sys.exit(0)
+    else:
+        print("Use --verify to verify the split.")
+        sys.exit(1)

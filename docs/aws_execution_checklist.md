@@ -44,7 +44,19 @@
   export ER_DATA_DIR=~/dataset
   ```
 
-## 4. Execution Procedure
+## 4. Validation Split Control
+The frozen split is a competition control artifact. Do NOT regenerate validation splits on AWS. Before running D2, you must verify the frozen split artifacts exist and match the manifest.
+* **Ensure these files are explicitly transferred to the EC2 instance**:
+  * `artifacts/validation_split/train_ids.csv`
+  * `artifacts/validation_split/val_ids.csv`
+  * `artifacts/validation_split/manifest.json` (also mapped via config)
+* **Run the Preflight Verification Command**:
+  ```bash
+  python -m src.entity_resolution.data.validation_split --verify
+  ```
+  *This will verify file existence, hashes, counts, and overlap. Abort the run if this fails!*
+
+## 5. Execution Procedure
 * **Required Environment Variables**:
   ```bash
   export ER_DATA_DIR=~/dataset
@@ -56,14 +68,14 @@
   ```
 * **Expected Runtime**: 10 - 15 minutes (with `c5.4xlarge`).
 
-## 5. Monitoring
+## 6. Monitoring
 While the script runs, open a second SSH session to monitor:
 * **CPU & RAM Usage**: `htop`
 * **Disk Usage**: `watch -n 10 df -h` (Ensure the EBS volume isn't filling up from TFIDF caching)
 * **Process Status**: `ps aux | grep python`
 * **Logs**: The script outputs directly to standard output. Run via `tmux` or redirect to a file if you want to persist the stdout stream: `python scripts/aws/run_d2_blocking.py > blocking_run.log 2>&1 &` then `tail -f blocking_run.log`.
 
-## 6. Output Verification
+## 7. Output Verification
 After completion, verify the expected artifact: `artifacts/blocking/validation_candidate_pairs.tsv`
 
 * **File Verification commands**:
@@ -83,5 +95,5 @@ After completion, verify the expected artifact: `artifacts/blocking/validation_c
   * `git commit hash` (generator_commit)
   * generation timestamp
 
-## 7. Cost Tracking
+## 8. Cost Tracking
 Update `docs/aws_cost_tracking.md` immediately upon terminating the instance.
