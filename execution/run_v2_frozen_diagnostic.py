@@ -30,7 +30,7 @@ def _joined(record_adapter, pairs, batch_size):
 def main():
     base = Path("D:/Amazon-ML-Challenge/artifacts/blocking/BLK-020_word_unigram_69a91f1")
     store_path = Path("D:/Amazon-ML-Challenge/.tmp/train_records.sqlite")
-    stats_path = Path("D:/Amazon-ML-Challenge/record_stats_trainval.parquet")
+    stats_path = Path("D:/record_stats_trainval.parquet")
     
     print("Loading train pairs...")
     train_pairs = pd.read_csv(base / "train_sample_candidate_pairs.tsv", sep="\t", dtype=str)
@@ -127,4 +127,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
