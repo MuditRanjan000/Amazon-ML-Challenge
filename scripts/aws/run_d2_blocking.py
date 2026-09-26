@@ -3,6 +3,7 @@
   python scripts/aws/run_d2_blocking.py --split trainval              # train + validation S1 vs the train S2+S3 index
   python scripts/aws/run_d2_blocking.py --split test                  # test S1 vs the test S2+S3 index
   python scripts/aws/run_d2_blocking.py --split trainval --sample 5000  # timing/recall check on val, writes no TSV
+  python scripts/aws/run_d2_blocking.py --split trainval --sample 20000 --blocker word  # same check, another pinned config
 
 Writes artifacts/blocking/{train,validation,test}_candidate_pairs.tsv
 (source1_entity_id, candidate_entity_id, score, rank) and records, per split, the blocker
@@ -32,6 +33,10 @@ from entity_resolution.tracking import git_commit, log_run
 # D2 (EXP-002B): country partitions, business_name + business_address, char_wb (3,5), min_df 2, top-200.
 D2 = dict(text_fields=["business_name", "business_address"], analyzer="char_wb", ngram_range=[3, 5],
           min_df=2, partition_by_country=True)
+# Candidates for comparison against D2: identical except the analyzer (and max_df for the pruned variant).
+BLOCKERS = {"d2": D2,
+            "word": {**D2, "analyzer": "word", "ngram_range": [1, 1]},
+            "word_maxdf02": {**D2, "analyzer": "word", "ngram_range": [1, 1], "max_df": 0.02}}
 K = 200
 K_SWEEP = (10, 25, 50, 100, 200)
 OUT_DIR = config.REPO_ROOT / "artifacts" / "blocking"
@@ -99,6 +104,7 @@ def main():
     p.add_argument("--in-memory", action="store_true", help="keep the index in RAM (needs ~25 GB peak)")
     p.add_argument("--batch", type=int, default=250_000, help="S1 per query batch / TSV write")
     p.add_argument("--exp-id", default="EXP-002B-stage2")
+    p.add_argument("--blocker", choices=list(BLOCKERS), default="d2")
     a = p.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     commit = git_commit()
@@ -110,6 +116,7 @@ def main():
     data_split = "test" if a.split == "test" else "train"
     s1 = loader.load_source(data_split, 1)
     pool = loader.load_candidates_pool(data_split, columns=["entity_id", "country"] + D2["text_fields"])
+    load_s = time.time() - t0
     gt, jobs = None, []
     if a.split == "test":
         jobs = [("test", s1)]
@@ -122,10 +129,11 @@ def main():
             jobs.append(("train", s1[s1["entity_id"].isin(train_ids)]))
         jobs.append(("validation", s1[s1["entity_id"].isin(val_ids)]))
 
-    blocker = TfidfBlocker(**D2, n_jobs=config.N_JOBS,
-                           cache_dir=None if a.in_memory else config.CACHE_DIR / "d2_index").fit(pool)
+    t_index = time.time()
+    blocker = TfidfBlocker(**BLOCKERS[a.blocker], n_jobs=config.N_JOBS,
+                           cache_dir=None if a.in_memory else config.CACHE_DIR / "tfidf_index").fit(pool)
     del pool
-    index_s = time.time() - t0
+    index_s = time.time() - t_index
     config_sha = hashlib.sha256(json.dumps(blocker.config, sort_keys=True).encode()).hexdigest()[:12]
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -133,16 +141,17 @@ def main():
     meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
     if "splits" not in meta:  # pre-v2 metadata had no per-split records
         meta = {"splits": {}}
-    meta.update(blocker="D2: TfidfBlocker, country-partitioned, char_wb (3,5), business_name + business_address",
+    meta.update(blocker=f"{a.blocker}: TfidfBlocker {BLOCKERS[a.blocker]}",
                 generator="scripts/aws/run_d2_blocking.py", top_k=K, validation_split="frozen (manifest-verified)")
 
     for name, frame in jobs:
         t1 = time.time()
         out_path = None if a.sample else OUT_DIR / f"{name}_candidate_pairs.tsv"
         n_cand, metrics = generate(blocker, frame, gt, out_path, a.batch)
-        record = {"config": blocker.config, "config_sha": config_sha, "generator_commit": commit,
-                  "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
-                  "runtime_s": round(time.time() - t1 + index_s, 1),
+        record = {"blocker": a.blocker, "config": blocker.config, "config_sha": config_sha,
+                  "generator_commit": commit, "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+                  "load_s": round(load_s, 1), "index_s": round(index_s, 1), "query_s": round(time.time() - t1, 1),
+                  "s1_per_s": round(len(frame) / max(time.time() - t1, 1e-9), 1),
                   **distribution(n_cand, frame["country"].fillna("").to_numpy()),
                   **{k: round(v, 5) for k, v in metrics.items()}}
         if out_path:
@@ -154,7 +163,7 @@ def main():
                           "sample": a.sample, **record})
         print(f"\n== {name} ==")
         for key in ("n_s1", "total_pairs", "avg_cand_at_200", "p99_cand", "no_candidates", "recall_at_10",
-                    "recall_at_50", "recall_at_200", "ceiling_f05_at_200", "runtime_s"):
+                    "recall_at_50", "recall_at_200", "ceiling_f05_at_200", "index_s", "query_s", "s1_per_s"):
             print(f"{key:22s} {record.get(key)}")
         print(f"peak RSS {logged['peak_rss_gb']} GB | commit {commit} | config {config_sha}")
 
