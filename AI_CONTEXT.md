@@ -32,19 +32,8 @@ A 20% validation split on `source1_entity_id` is strictly enforced and frozen to
 
 # Active Experiments
 - **EXP-002B**: Optimized Partitioned TF-IDF Blocking.
-    - **Stage 1 (Completed)**: Out-of-core memory-safe pipeline created. Evaluated on 1k queries. D2 (`business_name` + `business_address`, char ngrams 3,5) achieved a remarkable **96.29% Recall@200**.
-    - **Stage 2 (Running)**: Actively running Variant D2 against the entire frozen validation split (35k queries) to generate `validation_candidate_pairs.tsv` and measure full-scale metrics.
-    - **2026-09-26 (Aayush): Stage 2 code could not produce D2.**
-      - It ran **word** (3,5)-grams (the `analyzer` was never passed).
-      - It would OOM on train.
-      - It fails the split SHA check on Linux.
-      - Val is 441,365 S1, not 35k.
-      - Fixed on `experiment/aayush-blocking-hybrid-v2`. Any Stage 2 output produced from the old code is invalid.
-    - **BLK-018 (fixed D2, 5k val):** R@10 0.900 / R@50 0.940 / R@200 0.957, ceiling F0.5@200 0.984. **About 10 S1/s on the laptop**, so train+val is about 60 h and test about 48 h.
-    - **Decision needed (Mudit):**
-      - (a) D2 on AWS, fanned out across instances;
-      - (b) D2 on a train-S1 subsample for Ashank (val + test stay full);
-      - (c) switch to word-unigram name+address (R@200 0.972, 10–30x faster; re-measure with the new class first).
+    - **Stage 1 & 2 (Completed)**: Evaluated D2 vs word-unigram on frozen validation.
+    - **Decision (Mudit)**: The D2 comparison is complete. The final selected blocker is **word unigram** (name+address, K=200). `char_wb` (D2) has been retired.
 
 # Experiment Results
 - **EXP-001:** F0.5 = 0.19372. Baseline confirms need for fuzzy matching and blocking.

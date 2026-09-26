@@ -1,7 +1,7 @@
 # Directive: Candidate Generation / Blocking
 
 **Owner:** Aayush • **Consumers:** Ashank (matching), Mudit (integration, `candidate_pairs.tsv`)
-**Status (2026-09-26):** the team blocker is **D2** (Mudit's decision): country-partitioned TF-IDF, `business_name + business_address`, **char_wb (3,5)**, min_df 2, top-200. Train, val and test candidates all come from `scripts/aws/run_d2_blocking.py` with that one pinned config. The parquet contract below was superseded by TSV `artifacts/blocking/{train,validation,test}_candidate_pairs.tsv` (`source1_entity_id, candidate_entity_id, score, rank`), with per-split config hash, commit, TSV sha256 and metrics in `artifacts/blocking/blocking_metadata.json`.
+**Status (2026-09-26):** the team blocker is **word unigram** (Mudit's decision after D2 comparison): country-partitioned TF-IDF, `business_name + business_address`, **word unigram**, min_df 2, top-200. Train, val and test candidates all come from `scripts/aws/run_d2_blocking.py` with that pinned config (`--blocker word`). The parquet contract below was superseded by TSV `artifacts/blocking/{train,validation,test}_candidate_pairs.tsv` (`source1_entity_id, candidate_entity_id, score, rank`), with per-split config hash, commit, TSV sha256 and metrics in `artifacts/blocking/blocking_metadata.json`.
 
 ### D2 generator
 - `python scripts/aws/run_d2_blocking.py --split trainval` → train + validation TSVs from one index/run. `--split test` → test TSV (test S2+S3 index, same config). `--sample N` → val-only timing/recall check, writes no TSV. `--blocker d2|word|word_maxdf02` picks a pinned config (default d2). `--in-memory` on a ≥64 GB box; otherwise the index is sharded to disk under `ER_CACHE_DIR/tfidf_index/<config+data hash>/` and reused.
