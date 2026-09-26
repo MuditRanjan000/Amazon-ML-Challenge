@@ -109,13 +109,13 @@ class TfidfBlocker(BaseBlocker):
                     c_mat = joblib.load(os.path.join(self.cache_dir, f'mat_{target_c}_{chunk_idx}.joblib'))
                     c_ids = joblib.load(os.path.join(self.cache_dir, f'ids_{target_c}_{chunk_idx}.joblib'))
                     
-                    chunk_sz = max(1, 50_000_000 // c_mat.shape[0])
+                    chunk_sz = 100_000
                     chunks = []
                     for i in range(0, q_mat.shape[0], chunk_sz):
                         end = min(i + chunk_sz, q_mat.shape[0])
                         chunks.append((q_mat[i:end], grp['entity_id'].iloc[i:end].values))
                         
-                    chunk_res = Parallel(n_jobs=2, backend='threading')(delayed(self._process_chunk)(q, c_mat, c_ids, ids, k) for q, ids in chunks)
+                    chunk_res = Parallel(n_jobs=self.n_jobs or 2, backend='threading')(delayed(self._process_chunk)(q, c_mat, c_ids, ids, k) for q, ids in chunks)
                     for res in chunk_res: country_results.extend(res)
                     del c_mat, c_ids
                     gc.collect()
