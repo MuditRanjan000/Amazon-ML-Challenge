@@ -135,3 +135,7 @@
   - Test stats pending (see blocker below).
 - **Blocker at 21:14 IST:** the AWS access key was revoked (likely the root-key rotation). All presigned links are dead; AWS work is paused until an IAM user's keys are configured locally.
 - **Docs:** blocking section of `docs/methodology.md` written. `experiments/results/diagnostics/` holds the B1/B2 reports + the bucket table.
+
+
+## Session Changelog
+- **2026-09-26 Model V2 Diagnostic Resolution:** Resolved indexing and OOM errors during the V2 diagnostic run on AWS parity by switching from reading large TSVs to performing an internal train/validation split on the 500k sample feature matrix directly. The diagnostic run succeeded on i-0b37c32f4171dca6e and demonstrated that HistGradientBoostingClassifier achieved a macro F0.5 of 0.899 (Precision: 0.934, Recall: 0.833) at a threshold of 0.55, compared to the Logistic Regression baseline of 0.864 at a threshold of 0.50.
