@@ -69,9 +69,8 @@ A 20% validation split on `source1_entity_id` is strictly enforced and frozen to
 - Integration work is isolated in `D:\Amazon-ML-Challenge-integration` atop `origin/feature/mudit-submission` `385b36d`; the five reported shared-file conflicts were resolved using Mudit's branch as the base. Package imports now use `entity_resolution.*` and shared `ER_DATA_DIR` configuration.
 - Model v2 is a separate, unfit feature schema. It adds BLK-020 full-pool retrieval statistics without changing the saved 43-feature artifact: locking_score, est_score, second_score, 
 _s1, is_best_s1, margin_to_best, and owner_gap. The required 10.2M-row train+validation statistics parquet, its SHA-256, and matching full train candidate artifact are not present in the checkout or private challenge S3; obtain fresh paths/hashes from Aayush/Mudit before fitting v2.
-- The Model V2 Diagnostic was run successfully on AWS: Evaluated against an internal split of the 500k sample candidate preflight dataset, the HistGradientBoostingClassifier achieved a macro F0.5 of 0.899 (Precision: 0.934, Recall: 0.833) at a threshold of 0.55, vastly outperforming the Logistic Regression baseline which achieved 0.864 at a threshold of 0.50.
+- The Model V2 Diagnostic was an internal training diagnostic on a row-split of the 500k training candidate sample. The reported macro F0.5 of 0.899 has significant entity leakage and is NOT a frozen-validation result. It cannot be used to establish that v2 beats the official 0.8554 baseline.
 
-# Known Issues
 - Baseline misses all typo, transliteration, and abbreviation variations, resulting in extremely poor recall.
 
 # Future Experiments
