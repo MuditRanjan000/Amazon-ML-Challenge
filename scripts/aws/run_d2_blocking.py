@@ -103,6 +103,7 @@ def main():
     p.add_argument("--sample", type=int, default=0, help="only N random val S1, metrics only (no TSV)")
     p.add_argument("--train-sample", type=int, default=0, help="only N random train S1")
     p.add_argument("--write-sample", action="store_true", help="write TSV even if sampling")
+    p.add_argument("--val-only", action="store_true", help="only generate validation split")
     p.add_argument("--in-memory", action="store_true", help="keep the index in RAM (needs ~25 GB peak)")
     p.add_argument("--batch", type=int, default=250_000, help="S1 per query batch / TSV write")
     p.add_argument("--exp-id", default="EXP-002B-stage2")
@@ -130,6 +131,8 @@ def main():
             jobs.append(("train_sample", s1[s1["entity_id"].isin(train_ids)]))
         elif a.sample:
             val_ids = set(random.Random(config.SEED).sample(sorted(val_ids), a.sample))
+            jobs.append(("validation", s1[s1["entity_id"].isin(val_ids)]))
+        elif getattr(a, "val_only", False):
             jobs.append(("validation", s1[s1["entity_id"].isin(val_ids)]))
         else:
             jobs.append(("train", s1[s1["entity_id"].isin(train_ids)]))
