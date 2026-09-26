@@ -150,6 +150,67 @@
    "full_coverage_at_200": 0.93399,
    "tsv": "artifacts/blocking/validation_candidate_pairs.tsv",
    "tsv_sha256": "906fc126ece79a5665f2037c2127855862648c87bdb5f1133b5d55ef7dddf87c"
+  },
+  "test": {
+   "blocker": "word",
+   "config": {
+    "text_fields": [
+     "business_name",
+     "business_address"
+    ],
+    "ngram_range": [
+     1,
+     1
+    ],
+    "analyzer": "word",
+    "n_features": 4194304,
+    "partition_by_country": true,
+    "strip_legal": false,
+    "min_df": 2,
+    "max_df": 1.0
+   },
+   "config_sha": "657f59868e58",
+   "generator_commit": "76762de",
+   "generated_at": "2026-09-26T14:39:42",
+   "parts": 48,
+   "index_s": 178.6,
+   "query_s": 477.4,
+   "n_s1": 1732544,
+   "total_pairs": 346508800,
+   "no_candidates": 0,
+   "p50_cand": 200.0,
+   "p95_cand": 200.0,
+   "p99_cand": 200.0,
+   "max_cand": 200,
+   "avg_cand_at_10": 10.0,
+   "total_pairs_at_10": 17325440,
+   "avg_cand_at_25": 25.0,
+   "total_pairs_at_25": 43313600,
+   "avg_cand_at_50": 50.0,
+   "total_pairs_at_50": 86627200,
+   "avg_cand_at_100": 100.0,
+   "total_pairs_at_100": 173254400,
+   "avg_cand_at_200": 200.0,
+   "total_pairs_at_200": 346508800,
+   "by_country": {
+    "France": {
+     "n_s1": 259452,
+     "avg_cand": 200.0,
+     "no_candidates": 0
+    },
+    "India": {
+     "n_s1": 809986,
+     "avg_cand": 200.0,
+     "no_candidates": 0
+    },
+    "US": {
+     "n_s1": 663106,
+     "avg_cand": 200.0,
+     "no_candidates": 0
+    }
+   },
+   "tsv": "artifacts/blocking/test_candidate_pairs.tsv",
+   "tsv_sha256": "6e11c1ec60a8f73f47b214211002928f66eac08f19c60a3be73bc682bced5925"
   }
  },
  "blocker": "word: TfidfBlocker {'text_fields': ['business_name', 'business_address'], 'ngram_range': [1, 1], 'analyzer': 'word', 'n_features': 4194304, 'partition_by_country': True, 'strip_legal': False, 'min_df': 2, 'max_df': 1.0}",

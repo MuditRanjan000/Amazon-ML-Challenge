@@ -22,6 +22,14 @@
   - Run cost: 48 workers × ~18 min + merge ≈ $1.5 of credits.
   - Git Bash mangles `/dev/...` and `/aws/...` CLI args: pass block-device mappings via `file://` JSON.
 
+### After the freeze (2026-09-26 night)
+- **Test candidates:** 346,508,800 pairs (commit 76762de, same config); France has its own partition.
+- **BLK-021 misses:** 2.21% of val pairs; 3 unrecoverable; India pair recall 0.959 vs US 0.991.
+- **BLK-022 channel unions:** best ceiling 0.9959 at +184 cands/S1 → rejected at the 0.997 gate.
+- **Competition stats** (`execution/candidate_record_stats.py`) go to the matcher as features, never as a hard filter: the true S1 is the top-scoring S1 for only 93.9% of true pairs.
+- **Rule baseline RULE-001:** val F0.5 0.7505.
+- **Lesson:** anything comparing S1s against each other must be computed over every S1 that shares the pool. For validation that means train + val candidates together.
+
 ### D2 generator
 - `python scripts/aws/run_d2_blocking.py --split trainval` → train + validation TSVs from one index/run. `--split test` → test TSV (test S2+S3 index, same config). `--sample N` → val-only timing/recall check, writes no TSV. `--blocker d2|word|word_maxdf02` picks a pinned config (default d2). `--in-memory` on a ≥64 GB box; otherwise the index is sharded to disk under `ER_CACHE_DIR/tfidf_index/<config+data hash>/` and reused.
 - The script refuses to write artifacts from a dirty tree: commit and push first.

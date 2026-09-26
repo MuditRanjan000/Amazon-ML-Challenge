@@ -1,0 +1,32 @@
+val S1 441365, true pairs 1528543
+found 1494765 / 1528543 true pairs; missed 33778 (2.2098%) in 46s
+
+BASE ceiling@200 0.99213   (perfect recall -> 1.0)
+category                                           misses   share  ceiling if recovered
+country_mismatch                                        0   0.00%  0.99213
+cross_script                                         7265  21.51%  0.99413
+no_shared_word (word TF-IDF score 0)                   26   0.08%  0.99214
+shared_word -> crowded out of top-200               33752  99.92%  0.99999
+empty_addr (either side)                             7400  21.91%  0.99370
+translit name similar (nk_fuzz>=80)                 15023  44.48%  0.99565
+UNREACHABLE (no shared word, nk<50, addr<50)            3   0.01%  0.99213
+ALL except UNREACHABLE                              33775  99.99%  1.00000   <- max achievable by any text channel
+
+medians: name_fuzz 48.648647 addr_fuzz 74.5098 nk_fuzz 77.41936
+
+sample misses:
+                           s1_raw_name                           rec_raw_name                                s1_addr                               rec_addr s1_country rec_country
+30690               Capital Foundation                      Capital Fonudlion  90 le chase drive unit unit d gate...                                                US          US
+8336        Anchor Atlantic Spire Inc.                anchoratlanticspire.com  5916 new nashville highway unit 42...  916 new nashville hwy 420 murfrees...         US          US
+25180                 A Creative Roman                       A Creative R0man            rosenberg tx 5931 wayne way                                                US          US
+14742                  Anglin & Harvin                       anglinharvin.com            1000 marsh street muncie in                 1000 masrh st munie in         US          US
+10499         All Tech Private Limited              All Toehc Private Limited  c 70 c f shivaji park punjabi bagh...                                             India       India
+20941               Verma Giant-Lowell                    Verma Glanntemoelwl            lowell 143 tanner street ma                                                US          US
+29173            Refineries Hotels LLP                   refinerieshotels.com  booster no 02 chhara 17 jhajjar ba...             h no 898 9 jhajjar हरियाणा      India       India
+10598                 Alpha Developers                          Alpha Sérvice  at post khirpuri bk tq balapur dis...                                             India       India
+18036          Shiv Investment Pvt Ltd  ಶಿವ್ ಇನ್ವೆಸ್ಟ್‌ಮೆಂಟ್ ಪ್ರೈವೇಟ್ ಲಿಮಿ...  no 24 2nd cross r garden k palya b...                   16 bangalore ಕರ್ನಾಟಕ      India       India
+20363  Williams Advanced Briacell PLLC           williamsadvancedbriacell.com         10830 boykin place matthews nc  1083 boykin pl mtathews north caro...         US          US
+15687              Clear Great Phoenix                            @cleargreat              1220 main street alton il       1220b main street alton illinois         US          US
+24237    Indo Software Private Limited      ইন্দো সফটওয়্যার প্রাইভেট লিমিটেড  163 1 v i p road 1st floor kolkata...  wb calcutta door no 0163 1 v i p r...      India       India
+
+done in 51s

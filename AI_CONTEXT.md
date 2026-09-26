@@ -46,6 +46,13 @@ A 20% validation split on `source1_entity_id` is strictly enforced and frozen to
 - Train: 353,091,200 pairs, R@200 0.97795. Validation: 88,273,000 pairs, R@200 0.9779, ceiling F0.5 0.99213.
 - Files in `s3://amazon-ml-2026-blocking-716522590518/run-69a91f1/final/`; see `artifacts/blocking/blocking_report.md`. Test candidates pending the IDF-on-test ruling.
 
+# Night of 26 Sep (Aayush)
+- Test candidates done (346.5M pairs, France partition OK).
+- RULE-001 baseline: val F0.5 0.7505, submission files validated.
+- Blocking v2 rejected at the gate (best ceiling 0.9959); BLK-020 final.
+- Competition stats for train+val ready.
+- AWS paused: key revoked, new IAM keys needed.
+
 # Experiment Results
 - **EXP-001:** F0.5 = 0.19372. Baseline confirms need for fuzzy matching and blocking.
 - **EXP-002:** Aborted. Computing non-partitioned sparse-matrix dot products for 10.3M rows proved computationally non-viable for rapid iteration without an AWS cluster.
