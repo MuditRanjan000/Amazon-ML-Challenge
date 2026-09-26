@@ -135,3 +135,13 @@
   - Test stats pending (see blocker below).
 - **Blocker at 21:14 IST:** the AWS access key was revoked (likely the root-key rotation). All presigned links are dead; AWS work is paused until an IAM user's keys are configured locally.
 - **Docs:** blocking section of `docs/methodology.md` written. `experiments/results/diagnostics/` holds the B1/B2 reports + the bucket table.
+
+## [2026-09-27 03:20 IST] Portable AWS backup kit (Aayush; his AWS account is suspended)
+- **`scripts/aws/launch_fanout.sh`** (setup | bundle | run | status, `--dry-run`) runs the BLK-020 fan-out on **any** AWS account:
+  - private bucket + IAM role/profile + no-inbound SG, parquet data bundle, 48 self-terminating workers + merge;
+  - retries transient vCPU errors and relaunches failed/interrupted parts once;
+  - no `/dev/...` argument mangling under Git Bash.
+- **The merge now also builds `record_stats_<split>.parquet`** (competition stats) and a `SHA256SUMS`, so test stats no longer need a laptop step.
+- The region is now a user-data placeholder (`__REGION__`).
+- `docs/aws_blocking_runbook.md` is rewritten for the frozen blocker, with expected byte-identical hashes as the reproducibility check.
+- Verified: dry-run of setup and run (3 workers, spot split), rendered user-data has every placeholder filled, `bash -n` passes, 31 tests pass. **Not yet executed on AWS**; the first real run is Mudit's backup account.
