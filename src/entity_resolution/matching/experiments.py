@@ -1,6 +1,6 @@
 """Compatibility import for bounded experiments now owned by ``models``."""
 
-from src.entity_resolution.models.experiments import (
+from entity_resolution.models.experiments import (
     BoundedExperimentConfig,
     candidate_recall,
     labels_for_candidates,
@@ -11,6 +11,7 @@ from src.entity_resolution.models.experiments import (
     select_ground_truth,
     sha256_file,
     validate_entity_disjoint,
+    verify_repository_evaluator_known_answer,
 )
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "select_ground_truth",
     "sha256_file",
     "validate_entity_disjoint",
+    "verify_repository_evaluator_known_answer",
 ]

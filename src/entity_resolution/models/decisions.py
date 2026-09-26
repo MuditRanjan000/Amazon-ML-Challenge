@@ -40,3 +40,33 @@ class ThresholdDecisionLayer:
         output = pd.DataFrame({"source1_entity_id": source1_ids})
         output["matched_entity_ids"] = output["source1_entity_id"].map(grouped).fillna("")
         return output
+
+
+class OneOwnerThresholdDecisionLayer(ThresholdDecisionLayer):
+    """Threshold probabilities, then retain one deterministic S1 owner per candidate.
+
+    Multiple candidates can still be accepted for one Source-1 entity.  This
+    layer is only valid when the caller has first audited the one-owner premise
+    against ground truth and supplied scores from the complete relevant S1
+    pool; it is not a top-1 matcher.
+    """
+
+    def decide(self, scores: pd.DataFrame, complete_source1_ids: pd.Series | list[str]) -> pd.DataFrame:
+        required = {"source1_entity_id", "candidate_entity_id", self.score_column}
+        missing = sorted(required - set(scores.columns))
+        if missing:
+            raise ValueError(f"Score table missing columns: {missing}.")
+        pairs = scores.loc[:, ["source1_entity_id", "candidate_entity_id", self.score_column]].copy()
+        if pairs.duplicated(["source1_entity_id", "candidate_entity_id"]).any():
+            raise ValueError("Scores contain duplicate candidate pairs.")
+        pairs[self.score_column] = pd.to_numeric(pairs[self.score_column], errors="coerce")
+        if pairs[self.score_column].isna().any() or not np.isfinite(pairs[self.score_column]).all():
+            raise ValueError("Scores must be finite numeric values.")
+        accepted = pairs.loc[pairs[self.score_column] >= self.threshold].copy()
+        # Stable ID tie-breaking makes distributed evaluations reproducible.
+        accepted = accepted.sort_values(
+            ["candidate_entity_id", self.score_column, "source1_entity_id"],
+            ascending=[True, False, True],
+            kind="stable",
+        ).drop_duplicates("candidate_entity_id", keep="first")
+        return super().decide(accepted, complete_source1_ids)

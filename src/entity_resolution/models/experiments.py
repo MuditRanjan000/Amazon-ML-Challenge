@@ -22,17 +22,13 @@ from typing import Protocol
 import numpy as np
 import pandas as pd
 
-from src.entity_resolution.evaluation.evaluator import Evaluator
+from ..evaluation.evaluator import Evaluator
 
 from ..matching.contracts import PROBABILITY_SCORE_COLUMNS, RAW_SCORE_COLUMNS, validate_candidate_pairs, validate_complete_source1_ids
-from src.entity_resolution.features import PairwiseFeatureExtractor
-from src.entity_resolution.models import (
-    DeterministicScorer,
-    LogisticRegressionConfig,
-    ThresholdDecisionLayer,
-    fit_logistic_regression,
-    predict_match_probabilities,
-)
+from ..features import PairwiseFeatureExtractor
+from .decisions import ThresholdDecisionLayer
+from .logistic import LogisticRegressionConfig, fit_logistic_regression, predict_match_probabilities
+from .rule import DeterministicScorer
 
 
 class RecordAdapter(Protocol):
@@ -668,7 +664,7 @@ def run_bounded_experiment(
     report = {
         "experiment_id": experiment_id,
         "status": evaluation_status,
-        "evaluator": "src.entity_resolution.evaluation.evaluator.Evaluator",
+        "evaluator": "entity_resolution.evaluation.evaluator.Evaluator",
         "evaluator_invocation": evaluator_invocation or "UNCONFIRMED_BY_MUDIT",
         "split_version": split_version or "UNSPECIFIED",
         "candidate_version": candidate_version or "UNSPECIFIED",

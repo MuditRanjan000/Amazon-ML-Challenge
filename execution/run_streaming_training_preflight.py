@@ -23,21 +23,21 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.entity_resolution.features import PairwiseFeatureExtractor
-from src.entity_resolution.matching.normalization import normalize_for_matching
-from src.entity_resolution.matching.records import SQLiteRecordStore
-from src.entity_resolution.models.experiments import (
+from entity_resolution.features import PairwiseFeatureExtractor
+from entity_resolution.matching.normalization import normalize_for_matching
+from entity_resolution.matching.records import SQLiteRecordStore
+from entity_resolution.models.experiments import (
     process_memory_bytes,
     read_source1_ids,
     select_ground_truth,
     sha256_file,
 )
-from src.entity_resolution.models.logistic import (
+from entity_resolution.models.logistic import (
     LogisticRegressionConfig,
     fit_logistic_regression,
     predict_match_probabilities,
 )
-from src.entity_resolution.models.streaming import CandidatePairSpool, StreamingConfig
+from entity_resolution.models.streaming import CandidatePairSpool, StreamingConfig
 
 
 def _parse_ids(value: object) -> set[str]:

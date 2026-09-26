@@ -14,6 +14,7 @@ Mudit's frozen split and evaluator remain authoritative. Do not change the split
 - Keep processing slice-based, bounded, and measured below approximately 6 GiB RAM. Do not add country one-hot features or country-specific hard rules: France is test-only and country must remain open-set.
 - Do not enable a global one-Source-1-per-S2/S3 assignment unless a direct ground-truth audit verifies that constraint. Source 1 may still have multiple valid matches.
 - Await Aayush's documented competition-feature columns/specification. The matcher must accept them as optional inputs without replacing BLK-020 or hard-coding country logic.
+- **v2 handoff now required:** a readable, hash-verified `record_stats_trainval.parquet` generated over the complete frozen train + validation Source-1 pool, plus the full BLK-020 frozen-train candidate artifact and its source-ID scope/hash. Expected parquet columns are `candidate_entity_id`, `best_score`, `second_score`, `n_s1`, and `best_s1`. The matcher derives `blocking_score`, `is_best_s1`, `margin_to_best`, and `owner_gap`; `best_s1` is never a hard ownership filter. Send the test equivalent only when test inference is authorised.
 - For every future full result, record candidate artifact/hash, rank cutoff, feature/model version, threshold provenance, macro entity F0.5, precision/recall definition, singleton results, blocking misses, matcher rejections, FP/FN categories, candidate density, runtime, and memory.
 
 ## Historical BLK-019 Word-Unigram contract

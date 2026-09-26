@@ -22,7 +22,7 @@ from typing import Iterator
 import numpy as np
 import pandas as pd
 
-from src.entity_resolution.evaluation.evaluator import Evaluator
+from ..evaluation.evaluator import Evaluator
 
 from ..features import PairwiseFeatureExtractor
 from ..matching.contracts import PROBABILITY_SCORE_COLUMNS, RAW_SCORE_COLUMNS, validate_complete_source1_ids
@@ -102,10 +102,16 @@ class StreamingConfig:
 
     pair_batch_size: int = 5_000
     include_rule_raw_scores: bool = True
+    source1_partition_count: int = 1
+    source1_partition_index: int = 0
 
     def __post_init__(self) -> None:
         if self.pair_batch_size <= 0:
             raise ValueError("pair_batch_size must be positive.")
+        if self.source1_partition_count <= 0:
+            raise ValueError("source1_partition_count must be positive.")
+        if not 0 <= self.source1_partition_index < self.source1_partition_count:
+            raise ValueError("source1_partition_index must be in [0, source1_partition_count).")
 
 
 class CandidatePairSpool:
@@ -117,7 +123,7 @@ class CandidatePairSpool:
     entities for decision construction.
     """
 
-    schema_version = 1
+    schema_version = 2
 
     def __init__(self, database_path: str | Path):
         self.database_path = Path(database_path)
@@ -127,7 +133,13 @@ class CandidatePairSpool:
         return self.database_path.with_suffix(self.database_path.suffix + ".json")
 
     def build(
-        self, candidate_path: str | Path, source1_ids_path: str | Path, *, reuse: bool = True, max_rank: int | None = None
+        self,
+        candidate_path: str | Path,
+        source1_ids_path: str | Path,
+        *,
+        reuse: bool = True,
+        max_rank: int | None = None,
+        filter_to_source1_ids: bool = False,
     ) -> dict[str, object]:
         candidate_path = Path(candidate_path)
         source1_ids_path = Path(source1_ids_path)
@@ -140,6 +152,7 @@ class CandidatePairSpool:
             "source1_ids_path": str(source1_ids_path.resolve()),
             "source1_ids_sha256": sha256_file(source1_ids_path),
             "max_rank": max_rank,
+            "filter_to_source1_ids": filter_to_source1_ids,
         }
         if self.database_path.exists() or self.metadata_path.exists():
             if not (self.database_path.exists() and self.metadata_path.exists()):
@@ -168,8 +181,12 @@ class CandidatePairSpool:
             if source_rows:
                 connection.executemany("INSERT INTO source1_ids VALUES (?, ?)", source_rows)
                 source_count += len(source_rows)
+            selected_source_ids = {
+                row[0] for row in connection.execute("SELECT source1_entity_id FROM source1_ids")
+            } if filter_to_source1_ids else set()
 
             pair_count = 0
+            skipped_outside_source1_pair_count = 0
             opener = gzip.open if candidate_path.suffix.lower() == ".gz" else Path.open
             with opener(candidate_path, "rt" if opener is gzip.open else "r", encoding="utf-8", newline="") as handle:
                 reader = csv.DictReader(handle, delimiter="\t")
@@ -191,6 +208,9 @@ class CandidatePairSpool:
                             raise ValueError(f"Invalid rank at {candidate_path}:{line_number}.") from error
                         if rank > max_rank:
                             continue
+                    if filter_to_source1_ids and source not in selected_source_ids:
+                        skipped_outside_source1_pair_count += 1
+                        continue
                     rows.append((source, candidate))
                     if len(rows) >= 10_000:
                         pair_count += self._insert_pairs(connection, rows)
@@ -222,6 +242,7 @@ class CandidatePairSpool:
             "candidate_pair_count": pair_count,
             "zero_candidate_source1_count": source_count - self.pair_source_count(),
             "max_rank": max_rank,
+            "skipped_outside_source1_pair_count": skipped_outside_source1_pair_count,
         }
         _write_json(self.metadata_path, metadata)
         return metadata
@@ -241,12 +262,27 @@ class CandidatePairSpool:
         finally:
             connection.close()
 
-    def iter_group_batches(self, pair_batch_size: int) -> Iterator[tuple[int, pd.DataFrame]]:
+    def iter_group_batches(
+        self,
+        pair_batch_size: int,
+        *,
+        source1_partition_count: int = 1,
+        source1_partition_index: int = 0,
+    ) -> Iterator[tuple[int, pd.DataFrame]]:
         if pair_batch_size <= 0:
             raise ValueError("pair_batch_size must be positive.")
+        if source1_partition_count <= 0:
+            raise ValueError("source1_partition_count must be positive.")
+        if not 0 <= source1_partition_index < source1_partition_count:
+            raise ValueError("source1_partition_index must be in [0, source1_partition_count).")
         connection = sqlite3.connect(self.database_path)
         try:
-            cursor = connection.execute("SELECT source1_entity_id, candidate_entity_id FROM pairs ORDER BY source1_entity_id, candidate_entity_id")
+            cursor = connection.execute(
+                "SELECT p.source1_entity_id, p.candidate_entity_id "
+                "FROM pairs AS p JOIN source1_ids AS s ON s.source1_entity_id = p.source1_entity_id "
+                "WHERE (s.ordinal % ?) = ? ORDER BY p.source1_entity_id, p.candidate_entity_id",
+                (source1_partition_count, source1_partition_index),
+            )
             batch: list[tuple[str, str]] = []
             group: list[tuple[str, str]] = []
             current: str | None = None
@@ -309,7 +345,12 @@ def score_logistic_stream(
     parts_path.mkdir(parents=True, exist_ok=True)
     spool_metadata = _json(spool.metadata_path)
     identity: dict[str, object] = {
-        "streaming_config": {"pair_batch_size": config.pair_batch_size, "include_rule_raw_scores": config.include_rule_raw_scores},
+        "streaming_config": {
+            "pair_batch_size": config.pair_batch_size,
+            "include_rule_raw_scores": config.include_rule_raw_scores,
+            "source1_partition_count": config.source1_partition_count,
+            "source1_partition_index": config.source1_partition_index,
+        },
         "spool": spool_metadata,
         "record_store": _artifact_identity(record_store.database_path),
     }
@@ -336,7 +377,11 @@ def score_logistic_stream(
     if not isinstance(completed, dict):
         raise ValueError("Invalid streaming state file.")
     newly_scored = 0
-    for number, pairs in spool.iter_group_batches(config.pair_batch_size):
+    for number, pairs in spool.iter_group_batches(
+        config.pair_batch_size,
+        source1_partition_count=config.source1_partition_count,
+        source1_partition_index=config.source1_partition_index,
+    ):
         key = str(number)
         probability_path = parts_path / f"logistic_{number:07d}.tsv"
         raw_path = parts_path / f"rule_raw_{number:07d}.tsv"
@@ -380,7 +425,14 @@ def score_logistic_stream(
         newly_scored += len(pairs)
         _write_json(state_path, state)
 
-    ordered = [completed[str(number)] for number, _ in spool.iter_group_batches(config.pair_batch_size)]
+    ordered = [
+        completed[str(number)]
+        for number, _ in spool.iter_group_batches(
+            config.pair_batch_size,
+            source1_partition_count=config.source1_partition_count,
+            source1_partition_index=config.source1_partition_index,
+        )
+    ]
     state.update(
         {
             "completed_pair_count": sum(int(part["pair_count"]) for part in ordered),

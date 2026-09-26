@@ -60,6 +60,15 @@ A 20% validation split on `source1_entity_id` is strictly enforced and frozen to
 # Current Best Pipeline
 - Exact string matching on normalized business names partitioned by country. (Baseline)
 
+## Ashank matcher: BLK-020 full frozen-validation baseline (AWS, 2026-09-27)
+
+- The pair-local 43-feature L2 Logistic model trained on the verified 2,500-S1 / 500,000-pair BLK-020 training preflight was scored over all 88,273,000 frozen-validation candidate pairs (441,365 Source-1 IDs). The pinned AWS runner archive SHA-256 is `7e0d7cf3f0bd93542856d65752f3d3c31d01e8e90fbc8c2cd83d124bbd1438d9`.
+- Official shared-evaluator tuning result: K=200 at probability threshold 0.60, macro F0.5 `0.8554358243`, macro precision `0.9046184359`, macro recall `0.7707768545`, pairwise TP/FP/FN `1,180,659 / 79,972 / 347,884`, and singleton accuracy `0.7714413281` (19,006/24,637). K=100 at the same threshold was `0.8553176338`; this is a tuning comparison, not a final submission threshold.
+- Both complete score files, rank-join report, decision artifacts, threshold sweep, fitted feature artifact, Logistic artifact, and record store are durable in the private challenge S3 bucket. The two temporary c7i.2xlarge workers were confirmed terminated after preservation. No reusable feature/model artifact remains only on EBS.
+- The temporary rank-sidecar SQLite database itself was not synced before termination; its hash and zero-missing/orphan report are durable, and it is deterministically rebuildable from the preserved BLK-020 gzip and pair-ID score files without re-extracting features.
+- Integration work is isolated in `D:\Amazon-ML-Challenge-integration` atop `origin/feature/mudit-submission` `385b36d`; the five reported shared-file conflicts were resolved using Mudit's branch as the base. Package imports now use `entity_resolution.*` and shared `ER_DATA_DIR` configuration.
+- Model v2 is a separate, unfit feature schema. It adds BLK-020 full-pool retrieval statistics without changing the saved 43-feature artifact: `blocking_score`, `best_score`, `second_score`, `n_s1`, `is_best_s1`, `margin_to_best`, and `owner_gap`. The required 10.2M-row train+validation statistics parquet, its SHA-256, and matching full train candidate artifact are not present in the checkout or private challenge S3; obtain fresh paths/hashes from Aayush/Mudit before fitting v2.
+
 # Known Issues
 - Baseline misses all typo, transliteration, and abbreviation variations, resulting in extremely poor recall.
 

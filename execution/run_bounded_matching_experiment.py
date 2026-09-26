@@ -19,8 +19,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.entity_resolution.data.config import resolve_data_dir
-from src.entity_resolution.models.experiments import (
+from entity_resolution.data.config import resolve_data_dir
+from entity_resolution.models.experiments import (
     BoundedExperimentConfig,
     read_candidate_groups,
     read_source1_ids,
@@ -31,7 +31,7 @@ from src.entity_resolution.models.experiments import (
     validate_frozen_split_manifest,
     verify_repository_evaluator_known_answer,
 )
-from src.entity_resolution.matching.records import SQLiteRecordStore
+from entity_resolution.matching.records import SQLiteRecordStore
 
 FROZEN_SPLIT_DIR = REPO_ROOT / "artifacts" / "validation_split"
 
@@ -53,10 +53,10 @@ def parser() -> argparse.ArgumentParser:
     command.add_argument("--candidate-version", help="Aayush candidate artifact/version identifier.")
     command.add_argument(
         "--evaluator-invocation",
-        default="src.entity_resolution.evaluation.evaluator.Evaluator.evaluate",
+        default="entity_resolution.evaluation.evaluator.Evaluator.evaluate",
         help="Mudit-confirmed evaluator callable reference.",
     )
-    command.add_argument("--data-dir", type=Path, help="Supplied dataset root; defaults to AMAZON_ML_DATA_DIR.")
+    command.add_argument("--data-dir", type=Path, help="Supplied dataset root; defaults to shared ER_DATA_DIR.")
     command.add_argument("--max-train-entities", type=int, default=1_000)
     command.add_argument(
         "--training-selection-seed",

@@ -20,11 +20,11 @@ __all__ = [
 
 def __getattr__(name: str):
     if name in {"FeatureConfig", "PairwiseFeatureExtractor"}:
-        from src.entity_resolution.features import FeatureConfig, PairwiseFeatureExtractor
+        from entity_resolution.features import FeatureConfig, PairwiseFeatureExtractor
 
         return {"FeatureConfig": FeatureConfig, "PairwiseFeatureExtractor": PairwiseFeatureExtractor}[name]
     if name in {"DeterministicScorer", "DeterministicScoringConfig", "ThresholdDecisionLayer"}:
-        from src.entity_resolution.models import DeterministicScorer, DeterministicScoringConfig, ThresholdDecisionLayer
+        from entity_resolution.models import DeterministicScorer, DeterministicScoringConfig, ThresholdDecisionLayer
 
         return {
             "DeterministicScorer": DeterministicScorer,

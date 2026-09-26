@@ -12,8 +12,8 @@ import argparse
 import pickle
 from pathlib import Path
 
-from src.entity_resolution.matching.records import SQLiteRecordStore
-from src.entity_resolution.models.streaming import (
+from entity_resolution.matching.records import SQLiteRecordStore
+from entity_resolution.models.streaming import (
     CandidatePairSpool,
     StreamingConfig,
     assemble_score_output,
@@ -33,8 +33,17 @@ def main() -> None:
     parser.add_argument("--feature-artifact", required=True, type=Path)
     parser.add_argument("--model", required=True, type=Path)
     parser.add_argument("--run-dir", required=True, type=Path)
+    parser.add_argument("--spool-path", type=Path, help="Shared immutable candidate spool path for disjoint scoring partitions.")
     parser.add_argument("--pair-batch-size", type=int, default=5_000)
+    parser.add_argument("--source1-partition-count", type=int, default=1)
+    parser.add_argument("--source1-partition-index", type=int, default=0)
+    parser.add_argument("--spool-only", action="store_true", help="Build or verify the spool and exit without model scoring.")
     parser.add_argument("--max-rank", type=int, help="Keep only input candidate rows with rank <= this value; requires a rank column.")
+    parser.add_argument(
+        "--filter-to-source1-ids",
+        action="store_true",
+        help="Explicit subset mode: skip candidate groups outside --source1-ids while preserving selected zero-candidate entities.",
+    )
     parser.add_argument("--max-source1-entities", type=int, help="Diagnostic prefix only; never a full benchmark.")
     parser.add_argument("--no-rule-raw-scores", action="store_true")
     parser.add_argument("--threshold", type=float)
@@ -48,8 +57,20 @@ def main() -> None:
     if args.max_source1_entities is not None:
         selected_ids = args.run_dir / "selected_source1_ids.csv"
         selection = write_source1_prefix(args.source1_ids, selected_ids, args.max_source1_entities)
-    spool = CandidatePairSpool(args.run_dir / "candidate_spool.sqlite")
-    metadata = spool.build(args.candidates, selected_ids, max_rank=args.max_rank)
+    spool = CandidatePairSpool(args.spool_path or args.run_dir / "candidate_spool.sqlite")
+    metadata = spool.build(
+        args.candidates, selected_ids, max_rank=args.max_rank, filter_to_source1_ids=args.filter_to_source1_ids
+    )
+    if args.spool_only:
+        import json
+
+        result = {"candidate_spool": metadata, "spool_only": True}
+        args.run_dir.mkdir(parents=True, exist_ok=True)
+        (args.run_dir / "streaming_run_report.json").write_text(
+            json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return
     with args.feature_artifact.open("rb") as handle:
         extractor = pickle.load(handle)
     with args.model.open("rb") as handle:
@@ -60,7 +81,12 @@ def main() -> None:
         extractor=extractor,
         model=model,
         run_dir=args.run_dir,
-        config=StreamingConfig(args.pair_batch_size, not args.no_rule_raw_scores),
+        config=StreamingConfig(
+            args.pair_batch_size,
+            not args.no_rule_raw_scores,
+            args.source1_partition_count,
+            args.source1_partition_index,
+        ),
         model_path=args.model,
         feature_artifact_path=args.feature_artifact,
     )

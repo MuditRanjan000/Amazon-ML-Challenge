@@ -23,10 +23,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.entity_resolution.data.config import resolve_data_dir
-from src.entity_resolution.features import PairwiseFeatureExtractor
-from src.entity_resolution.matching.normalization import script_indicators
-from src.entity_resolution.matching.records import DataFrameRecordAdapter, SQLiteRecordStore
+from entity_resolution.data.config import resolve_data_dir
+from entity_resolution.features import PairwiseFeatureExtractor
+from entity_resolution.matching.normalization import script_indicators
+from entity_resolution.matching.records import DataFrameRecordAdapter, SQLiteRecordStore
 
 
 def _timed(operation):

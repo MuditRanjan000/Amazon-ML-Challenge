@@ -12,10 +12,10 @@ import pandas as pd
 from pandas.testing import assert_frame_equal
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from src.entity_resolution.matching.contracts import validate_candidate_pairs
-from src.entity_resolution.matching.decision import ThresholdDecisionLayer
-from src.entity_resolution.matching.features import PairwiseFeatureExtractor
-from src.entity_resolution.matching.normalization import (
+from entity_resolution.matching.contracts import validate_candidate_pairs
+from entity_resolution.matching.decision import ThresholdDecisionLayer
+from entity_resolution.matching.features import PairwiseFeatureExtractor
+from entity_resolution.matching.normalization import (
     _python_jaro_winkler_similarity_normalized,
     _python_levenshtein_distance_normalized,
     jaro_winkler_similarity_normalized,
@@ -24,19 +24,19 @@ from src.entity_resolution.matching.normalization import (
     normalize_for_matching,
     token_set,
 )
-from src.entity_resolution.matching.records import DataFrameRecordAdapter, SQLiteRecordStore
-from src.entity_resolution.matching.scoring import DeterministicScorer
-from src.entity_resolution.models.experiments import BoundedExperimentConfig, run_bounded_experiment
-from src.entity_resolution.features import PairwiseFeatureExtractor as OwnedPairwiseFeatureExtractor
-from src.entity_resolution.models import DeterministicScorer as OwnedDeterministicScorer
-from src.entity_resolution.models.logistic import fit_logistic_regression, predict_match_probabilities
-from src.entity_resolution.models.experiments import (
+from entity_resolution.matching.records import DataFrameRecordAdapter, SQLiteRecordStore
+from entity_resolution.matching.scoring import DeterministicScorer
+from entity_resolution.models.experiments import BoundedExperimentConfig, run_bounded_experiment
+from entity_resolution.features import PairwiseFeatureExtractor as OwnedPairwiseFeatureExtractor
+from entity_resolution.models import DeterministicScorer as OwnedDeterministicScorer
+from entity_resolution.models.logistic import fit_logistic_regression, predict_match_probabilities
+from entity_resolution.models.experiments import (
     select_ground_truth,
     select_stable_stratified_train_ids,
     validate_frozen_split_manifest,
     verify_repository_evaluator_known_answer,
 )
-from src.entity_resolution.models.streaming import (
+from entity_resolution.models.streaming import (
     CandidatePairSpool,
     StreamingConfig,
     assemble_score_output,
@@ -59,7 +59,7 @@ def source_frames():
         [
             {
                 "entity_id": "S1-1",
-                "business_name": "Café कोण",
+                "business_name": "Café कोन",
                 "business_address": "12 MG Road, Pune, MH 411001",
                 "country": "India",
             },
@@ -75,7 +75,7 @@ def source_frames():
         [
             {
                 "entity_id": "S2-1",
-                "business_name": "कोण Cafe",
+                "business_name": "कोन Cafe",
                 "business_address": "12 M G Rd, Pune, MH 411001",
                 "country": "India",
             },
@@ -192,7 +192,7 @@ class CandidateAndRecordTests(unittest.TestCase):
                 {"source1_entity_id": ["S1-1"], "candidate_entity_id": ["S2-1"], "rank": [1]}
             )
             joined, metadata = next(store.iter_joined_batches(candidates, batch_size=1))
-            self.assertEqual(joined.loc[0, "source1_business_name"], "Café कोण")
+            self.assertEqual(joined.loc[0, "source1_business_name"], "Café कोन")
             self.assertEqual(metadata.loc[0, "rank"], 1)
 
 
@@ -268,8 +268,8 @@ class FeatureScoringDecisionTests(unittest.TestCase):
         self.assertIs(DeterministicScorer, OwnedDeterministicScorer)
 
     def test_unicode_abbreviation_and_reordered_tokens_retain_distinct_evidence(self):
-        self.assertEqual(normalize_for_matching("Café कोण"), "café कोण")
-        self.assertEqual(token_set("कोण Cafe"), {"कोण", "cafe"})
+        self.assertEqual(normalize_for_matching("Café कोन"), "café कोन")
+        self.assertEqual(token_set("कोन Cafe"), {"कोन", "cafe"})
         self.assertGreater(jaro_winkler_similarity("Acme Corporation", "Acme Corp"), 0.8)
         self.assertEqual(token_set("Cafe Corner"), token_set("Corner Cafe"))
         self.assertGreater(jaro_winkler_similarity("Cafe Corner", "Corner Cafe"), 0.6)
@@ -425,6 +425,31 @@ class FeatureScoringDecisionTests(unittest.TestCase):
             self.assertEqual(metadata["zero_candidate_source1_count"], 1)
             batches = list(spool.iter_group_batches(2))
             self.assertEqual([len(batch) for _, batch in batches], [2, 1])
+            partitioned = [
+                pd.concat(
+                    [
+                        batch
+                        for _, batch in spool.iter_group_batches(
+                            2,
+                            source1_partition_count=2,
+                            source1_partition_index=index,
+                        )
+                    ],
+                    ignore_index=True,
+                )
+                for index in range(2)
+            ]
+            self.assertEqual(partitioned[0]["source1_entity_id"].unique().tolist(), ["S1-1"])
+            self.assertEqual(partitioned[1]["source1_entity_id"].unique().tolist(), ["S1-2"])
+            partitioned_pairs = pd.concat(partitioned, ignore_index=True).sort_values(
+                ["source1_entity_id", "candidate_entity_id"]
+            )
+            self.assertEqual(
+                partitioned_pairs[["source1_entity_id", "candidate_entity_id"]].values.tolist(),
+                pairs.sort_values(["source1_entity_id", "candidate_entity_id"])[
+                    ["source1_entity_id", "candidate_entity_id"]
+                ].values.tolist(),
+            )
             state = score_logistic_stream(
                 spool=spool,
                 record_store=store,
@@ -496,15 +521,17 @@ class FeatureScoringDecisionTests(unittest.TestCase):
                         {"source1_entity_id": "S1-1", "candidate_entity_id": "S2-1", "score": "1", "rank": "1"},
                         {"source1_entity_id": "S1-1", "candidate_entity_id": "S3-1", "score": "0.9", "rank": "2"},
                         {"source1_entity_id": "S1-2", "candidate_entity_id": "S2-2", "score": "0.8", "rank": "1"},
+                        {"source1_entity_id": "S1-9", "candidate_entity_id": "S2-9", "score": "0.7", "rank": "1"},
                     ]
                 )
             source_ids = directory / "ids.csv"
             pd.DataFrame({"entity_id": ["S1-1", "S1-2", "S1-3"]}).to_csv(source_ids, index=False)
             spool = CandidatePairSpool(directory / "candidate_spool.sqlite")
-            metadata = spool.build(candidates, source_ids, max_rank=1)
+            metadata = spool.build(candidates, source_ids, max_rank=1, filter_to_source1_ids=True)
             self.assertEqual(metadata["candidate_pair_count"], 2)
             self.assertEqual(metadata["zero_candidate_source1_count"], 1)
             self.assertEqual(metadata["max_rank"], 1)
+            self.assertEqual(metadata["skipped_outside_source1_pair_count"], 1)
             batch = next(spool.iter_group_batches(10))[1]
             self.assertEqual(batch["candidate_entity_id"].tolist(), ["S2-1", "S2-2"])
 
