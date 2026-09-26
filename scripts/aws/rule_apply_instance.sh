@@ -1,10 +1,10 @@
 #!/bin/bash
 # EC2 user-data: apply the tuned rule baseline to the test candidates next to the data (Amazon Linux 2023).
 # Placeholders: __BUCKET__ __CODE_RUN__ (prefix holding code.tar.gz) __CAND__ (s3 key of test candidates .tsv.gz)
-#               __OUT__ (s3 prefix for outputs) __COMMIT__ __ARGS__ (rule args, e.g. "--R 10 --t 0.6 --a 0.8")
+#               __OUT__ (s3 prefix for outputs) __COMMIT__ __REGION__ __ARGS__ (rule args, e.g. "--R 10 --t 0.6 --a 0.8")
 # Writes matching_results.tsv + candidate_pairs.tsv (gz) to __OUT__/ and terminates; 1 h hard cap.
 BUCKET=__BUCKET__; S3=s3://$BUCKET; OUT=$S3/__OUT__; LOG=/var/log/rule.log
-export HOME=/root AWS_DEFAULT_REGION=ap-south-1
+export HOME=/root AWS_DEFAULT_REGION=__REGION__
 exec > >(tee -a $LOG) 2>&1
 finish() { trap - ERR; aws s3 cp $LOG $OUT/rule.log --only-show-errors || true
            echo "$1" | aws s3 cp - $OUT/status.$1 --only-show-errors || true; shutdown -h now; exit 0; }
