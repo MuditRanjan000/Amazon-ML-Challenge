@@ -1,30 +1,30 @@
 {
  "splits": {
   "train_sample": {
-   "blocker": "d2",
+   "blocker": "word",
    "config": {
     "text_fields": [
      "business_name",
      "business_address"
     ],
     "ngram_range": [
-     3,
-     5
+     1,
+     1
     ],
-    "analyzer": "char_wb",
+    "analyzer": "word",
     "n_features": 4194304,
     "partition_by_country": true,
     "strip_legal": false,
     "min_df": 2,
     "max_df": 1.0
    },
-   "config_sha": "b1b8663afac5",
-   "generator_commit": "4213573-dirty",
-   "generated_at": "2026-09-26T16:18:23",
-   "load_s": 32.1,
-   "index_s": 172.6,
-   "query_s": 769.5,
-   "s1_per_s": 3.2,
+   "config_sha": "657f59868e58",
+   "generator_commit": "187d955",
+   "generated_at": "2026-09-26T16:52:05",
+   "load_s": 32.9,
+   "index_s": 229.0,
+   "query_s": 91.8,
+   "s1_per_s": 27.2,
    "n_s1": 2500,
    "total_pairs": 500000,
    "no_candidates": 0,
@@ -54,26 +54,26 @@
      "no_candidates": 0
     }
    },
-   "recall_at_10": 0.90125,
-   "ceiling_f05_at_10": 0.96046,
-   "full_coverage_at_10": 0.75032,
-   "recall_at_25": 0.92852,
-   "ceiling_f05_at_25": 0.97168,
-   "full_coverage_at_25": 0.80902,
-   "recall_at_50": 0.94198,
-   "ceiling_f05_at_50": 0.97802,
-   "full_coverage_at_50": 0.84092,
-   "recall_at_100": 0.95208,
-   "ceiling_f05_at_100": 0.98192,
-   "full_coverage_at_100": 0.86729,
-   "recall_at_200": 0.95904,
-   "ceiling_f05_at_200": 0.98468,
-   "full_coverage_at_200": 0.88516,
+   "recall_at_10": 0.9226,
+   "ceiling_f05_at_10": 0.97312,
+   "full_coverage_at_10": 0.78945,
+   "recall_at_25": 0.95045,
+   "ceiling_f05_at_25": 0.98205,
+   "full_coverage_at_25": 0.86091,
+   "recall_at_50": 0.9631,
+   "ceiling_f05_at_50": 0.98732,
+   "full_coverage_at_50": 0.89579,
+   "recall_at_100": 0.96995,
+   "ceiling_f05_at_100": 0.98922,
+   "full_coverage_at_100": 0.91323,
+   "recall_at_200": 0.97807,
+   "ceiling_f05_at_200": 0.99318,
+   "full_coverage_at_200": 0.93492,
    "tsv": "artifacts/blocking/train_sample_candidate_pairs.tsv",
-   "tsv_sha256": "87fe8ff2037d17585623e1f8e7eadec1898dafc808947e772f6ed88009521075"
+   "tsv_sha256": "7a2232bda229508a4bf9219f147c6bc07c29419d3e27460710576cb3d2b8f108"
   }
  },
- "blocker": "d2: TfidfBlocker {'text_fields': ['business_name', 'business_address'], 'analyzer': 'char_wb', 'ngram_range': [3, 5], 'min_df': 2, 'partition_by_country': True}",
+ "blocker": "word: TfidfBlocker {'text_fields': ['business_name', 'business_address'], 'analyzer': 'word', 'ngram_range': [1, 1], 'min_df': 2, 'partition_by_country': True}",
  "generator": "scripts/aws/run_d2_blocking.py",
  "top_k": 200,
  "validation_split": "frozen (manifest-verified)"
