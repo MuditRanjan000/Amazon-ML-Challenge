@@ -110,3 +110,28 @@
   - Train: 353,091,200 rows, 1,765,456 unique S1, 0 duplicates.
   - Validation: 88,273,000 rows, 441,365 unique S1 (Matches frozen validation manifest exactly!), 0 duplicates.
 - **Merge & Sync:** Merged Ayush's PR (#7) `experiment/aayush-blocking-hybrid-v2` into `feature/mudit-submission`, resolving metadata lineage conflicts to lock in `word` blocker (`657f59868e58`). Tests passed. Code is clean and handoff is fully prepared for Ashank.
+
+## [2026-09-26 night] Test candidates, rule baseline, blocking v2 gate, competition stats (Aayush)
+- **Test candidates (BLK-020, commit 76762de, config 657f59868e58):**
+  - 1,732,544 S1 × 200 = 346,508,800 pairs; France gets its own partition (259k S1, 1.43M records); 0 empty in every country.
+  - sha256 `6e11c1ec…`. 48+1 m7i-flex instances, 22 min, ≈ $0.81.
+  - Files in `s3://amazon-ml-2026-blocking-716522590518/run-76762de/final/`. `blocking_metadata.json` now holds train + val + test.
+- **RULE-001 (`execution/rule_baseline.py`):**
+  - Rule: score ≥ 0.60 and ≥ 0.8 × the S1's top score, owner-only, from the top-10 candidates.
+  - Val F0.5 0.7505 (official evaluator; precision 0.802, recall 0.679, singleton accuracy 17%).
+  - Ownership is computed over train + val candidates together, because val S1 compete with train S1 for the same records (mirrors test).
+  - Test submission files built on AWS; the official validator PASSes with `--check-ids`. In `output/submissions/RULE-001/`.
+  - Purpose: tonight's leaderboard vs local-val calibration, not a contender.
+- **BLK-021 (miss diagnosis):**
+  - 33,778 val pairs missed (2.21%); only 3 are unrecoverable.
+  - 99.9% share a word with their S1 but are crowded out of the top-200 (typos, domain names, cross-script names).
+  - India is the weak spot: val pair recall 0.959 vs US 0.991; ceiling 0.985 vs 0.997.
+- **BLK-022 (channels):**
+  - Forward/reverse transliterated `name_key` and reverse word retrieval.
+  - Best union: ceiling 0.9959 at up to +184 candidates/S1. **Rejected at the 0.997 gate; BLK-020 stays.**
+- **Competition stats (`execution/candidate_record_stats.py`):**
+  - Per record: best/second score, number of competing S1, best S1. Computed over train + val together: 10.2M records, 96% contested, median 14 S1 per record.
+  - The true S1 is its record's top-scoring S1 in only 93.9% of true pairs, so use these as matcher features and apply one-owner assignment on model probabilities, never as a hard blocking filter.
+  - Test stats pending (see blocker below).
+- **Blocker at 21:14 IST:** the AWS access key was revoked (likely the root-key rotation). All presigned links are dead; AWS work is paused until an IAM user's keys are configured locally.
+- **Docs:** blocking section of `docs/methodology.md` written. `experiments/results/diagnostics/` holds the B1/B2 reports + the bucket table.
