@@ -152,6 +152,9 @@ def cmd_train(a):
     t0 = time.time()
     gt = DataLoader().load_ground_truth()
     train_ids, val_ids = create_validation_split(gt)
+    if a.exclude_s1:  # S1 treated as absent (orphan simulation): never sampled, never evaluated
+        gone = set(open(a.exclude_s1, encoding="utf-8").read().split())
+        train_ids, val_ids = train_ids - gone, val_ids - gone
     rng = np.random.default_rng(a.seed)
     sample = set(rng.choice(sorted(train_ids), a.n_s1, replace=False))
     pairs = stream_pairs(a.train_cands, a.K, s1_keep=sample)
@@ -521,6 +524,7 @@ def main():
     s.add_argument("--lr", type=float, default=0.08)
     s.add_argument("--leaves", type=int, default=127)
     s.add_argument("--seed", type=int, default=42, help="train-S1 sample seed (different seeds = ensemble diversity)")
+    s.add_argument("--exclude-s1", help="file of S1 IDs treated as absent (pair it with --stats computed without them)")
     s = sub.add_parser("score")
     s.add_argument("--cands", required=True)
     s.add_argument("--split", required=True, choices=["train", "test"], help="which normalized table")

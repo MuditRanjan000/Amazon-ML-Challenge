@@ -32,9 +32,13 @@ def _batches(path):
                               read_options=pacsv.ReadOptions(block_size=1 << 26))
 
 
-def record_stats(paths, record_ids, s1_ids):
-    """Stream candidate TSVs; top-2 scores, count and argmax S1 per record (exact, batch-mergeable)."""
+def record_stats(paths, record_ids, s1_ids, drop_s1=()):
+    """Stream candidate TSVs; top-2 scores, count and argmax S1 per record (exact, batch-mergeable).
+    drop_s1: S1 treated as absent (their records become orphans), to mimic test's denser distractors."""
     rec_index, s1_index = pd.Index(record_ids), pd.Index(s1_ids)
+    dropped = np.zeros(len(s1_index), bool)
+    if len(drop_s1):
+        dropped[s1_index.get_indexer(pd.Index(list(drop_s1)))] = True
     n = len(rec_index)
     best = np.full(n, -1.0, np.float32)
     second = np.full(n, -1.0, np.float32)
@@ -48,6 +52,9 @@ def record_stats(paths, record_ids, s1_ids):
             score = b.column(2).to_numpy(zero_copy_only=False)
             if (rec < 0).any() or (s1 < 0).any():
                 raise SystemExit(f"{path}: IDs outside the given pool / S1 set")
+            if dropped.any():
+                keep = ~dropped[s1]
+                rec, s1, score = rec[keep], s1[keep], score[keep]
             order = np.lexsort((np.arange(len(rec)), -score, rec))  # per record: best first, ties -> first seen
             rec, s1, score = rec[order], s1[order], score[order]
             starts = np.r_[0, np.flatnonzero(np.diff(rec)) + 1]
@@ -75,13 +82,15 @@ def main():
     ap.add_argument("--split", choices=["train", "test"], required=True, help="which pool the candidates index")
     ap.add_argument("--inputs", nargs="+", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--drop-s1", help="file with S1 IDs to treat as absent (one per line)")
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     t0 = time.time()
     loader = DataLoader()
     pool = loader.load_candidates_pool(a.split, columns=["entity_id"])["entity_id"]
     s1 = loader.load_source(a.split, 1, columns=["entity_id"])["entity_id"]
-    stats, rows = record_stats(a.inputs, pool, s1)
+    drop = open(a.drop_s1, encoding="utf-8").read().split() if a.drop_s1 else ()
+    stats, rows = record_stats(a.inputs, pool, s1, drop)
     stats.to_parquet(a.out, index=False)
     summary = {"records": len(stats), "pairs": rows, "contested_share": float((stats["n_s1"] > 1).mean()),
                "median_n_s1": float(stats["n_s1"].median())}
