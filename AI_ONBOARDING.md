@@ -157,5 +157,8 @@
   - Final peak verified leaderboard score: **0.967 Macro-F0.5**!
   - Score progression across the challenge: Baseline 0.193 -> BLK-020 Exact 0.7505 -> V3_r1 0.889 -> r4_country_cap 0.952 -> R4ensX 0.959 -> Ayush Ens3 0.965 -> **Final Best 0.967**.
 
-
-
+- **2026-09-28 Technical Postmortem Generation**:
+  - Generated the final technical postmortem and documentation deliverables as requested by Mudit.
+  - Replaced the repository `README.md` with a comprehensive technical postmortem detailing the architecture, timeline, root cause analysis, and roadmap.
+  - Generated `ARCHITECTURE_DIAGRAM.md` describing the modular 3-layer architecture.
+  - Generated `RESUME_BULLETS.md` and `LINKEDIN_POST.md` for team members to share their achievements.
