@@ -304,10 +304,14 @@ def norm_keys(split, ids):
     return t.to_pandas().set_index("entity_id")
 
 
-def read_scored(d, name, K=None):
+def read_scored(d, name, K=None, p_col=None):
+    """Scored parts; p_col picks one ensemble member's probability (p_m0, p_m1, ...) as `p`."""
     parts = sorted(Path(d).glob(f"{name}.part*.parquet"))
     assert parts, f"no {name} parts in {d}"
     df = pd.concat([pd.read_parquet(p) for p in parts], ignore_index=True)
+    if p_col:
+        df["p"] = df[p_col]
+        df = df[df["p"] >= P_KEEP]
     return df if K is None else df[df["rank"] <= K].reset_index(drop=True)
 
 
@@ -421,7 +425,7 @@ def cmd_decide(a):
     gt = DataLoader().load_ground_truth()
     train_ids, val_ids = create_validation_split(gt)
     m1_sample = set().union(*(joblib.load(m)["sample"] for m in a.m1.split(",")))  # never fit stage 2 on them
-    tv = pd.concat([read_scored(a.scored, "train", a.K), read_scored(a.scored, "val", a.K)], ignore_index=True)
+    tv = pd.concat([read_scored(a.scored, "train", a.K, a.p_col), read_scored(a.scored, "val", a.K, a.p_col)], ignore_index=True)
     if a.drop_s1:
         dropped = set(open(a.drop_s1, encoding="utf-8").read().split())
         tv = drop_s1(tv, dropped)
@@ -498,7 +502,7 @@ def check_candidate_file(path, s1_ids, matches):
 
 
 def apply_test(a, m2, feats, best, t0):
-    te = context(read_scored(a.scored, "test", a.K))
+    te = context(read_scored(a.scored, "test", a.K, a.p_col))
     te = siblings(te, norm_keys("test", set(te["s1"]) | set(te["cand"])))
     te["p2"] = m2.predict_proba(te[feats])[:, 1].astype(np.float32)
     tp = te[select(te, best)]
@@ -524,7 +528,7 @@ def cmd_variants(a):
     t0 = time.time()
     saved = joblib.load(a.m2)
     m2, feats, best = saved["m2"], saved["features"], saved["best"]
-    te = context(read_scored(a.scored, "test", a.K))
+    te = context(read_scored(a.scored, "test", a.K, a.p_col))
     te = siblings(te, norm_keys("test", set(te["s1"]) | set(te["cand"])))
     te["p2"] = m2.predict_proba(te[feats])[:, 1]
     s1 = DataLoader().load_source("test", 1, columns=["entity_id", "country"])
@@ -584,6 +588,7 @@ def main():
     s.add_argument("--s2-n", type=int, default=400_000, help="train S1 (not in the m1 sample) for stage 2")
     s.add_argument("--m1", default=str(V3 / "m1.joblib"), help="the stage-1 model the scored parts came from")
     s.add_argument("--s2-iters", type=int, default=300)
+    s.add_argument("--p-col", help="use this scored column (e.g. p_m2) as the stage-1 probability")
     s.add_argument("--reuse", action="store_true", help="skip val tuning; apply the saved m2<tag> + rule to test")
     s.add_argument("--tag", default="")
     s.add_argument("--out", default=str(config.OUTPUT_DIR / "submissions" / "V3"))
@@ -595,6 +600,7 @@ def main():
     s.add_argument("--m2", required=True, help="m2<tag>.joblib saved by decide")
     s.add_argument("--K", type=int, default=200)
     s.add_argument("--variants", required=True, help='JSON {name: shift | {country: shift, "*": default}}')
+    s.add_argument("--p-col", help="use this scored column (e.g. p_m2) as the stage-1 probability")
     s.add_argument("--out", required=True)
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
