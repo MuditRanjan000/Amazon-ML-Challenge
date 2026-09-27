@@ -538,15 +538,22 @@ def cmd_variants(a):
     te[["s1", "cand", "rank", "p", "p2"]].assign(country=cty).to_parquet(out / "test_p2.parquet", index=False)
     z = np.log(np.clip(te["p2"].to_numpy(), 1e-7, 1 - 1e-7) / np.clip(1 - te["p2"].to_numpy(), 1e-7, 1))
     n_s1 = s1["country"].value_counts()
-    for name, shift in json.loads(a.variants).items():
+    for name, spec in json.loads(a.variants).items():
+        spec = spec if isinstance(spec, dict) and ("shift" in spec or "cap" in spec) else {"shift": spec}
+        shift, cap = spec.get("shift", 0), spec.get("cap")
         d = (pd.Series(cty).map(shift).fillna(shift.get("*", 0)).to_numpy() if isinstance(shift, dict)
              else np.full(len(te), float(shift)))
         te["q"] = 1 / (1 + np.exp(-(z + d)))
-        tp = te[select(te, dict(best, prob="q"))]
+        m = select(te, dict(best, prob="q"))
+        if cap:  # per-country max matches per S1, keeping the highest-q ones
+            k = pd.Series(cty).map(cap).fillna(cap.get("*", 10 ** 6)).to_numpy()
+            r = pd.Series(np.where(m, -te["q"].to_numpy(), np.inf)).groupby(te["s1"].to_numpy()).rank(method="first")
+            m &= r.to_numpy() <= k
+        tp = te[m]
         SubmissionGenerator(out / name).generate(s1["entity_id"].tolist(), tp.rename(
             columns={"s1": "source1_entity_id", "cand": "candidate_entity_id"}))
-        per = (pd.Series(cty[select(te, dict(best, prob="q"))]).value_counts() / n_s1).round(3).to_dict()
-        logging.info("variant %s shift=%s: %d pairs; per S1 by country %s", name, shift, len(tp), per)
+        per = (pd.Series(cty[m]).value_counts() / n_s1).round(3).to_dict()
+        logging.info("variant %s %s: %d pairs; per S1 by country %s", name, spec, len(tp), per)
     logging.info("variants done in %.0fs", time.time() - t0)
 
 
