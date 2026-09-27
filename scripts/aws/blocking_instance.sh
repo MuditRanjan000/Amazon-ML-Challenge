@@ -1,14 +1,14 @@
 #!/bin/bash
 # EC2 user-data for blocking fan-out (Amazon Linux 2023). Placeholders are filled at launch:
-#   __MODE__ part|merge   __SPLIT__ trainval|test   __EXP__ experiment id   __PART__ i   __N__ n   __BUCKET__   __RUN__ (s3 prefix)   __COMMIT__
+#   __MODE__ part|merge   __SPLIT__ trainval|test   __EXP__ experiment id   __PART__ i   __N__ n   __BUCKET__   __RUN__ (s3 prefix)   __COMMIT__   __REGION__
 # part : run_d2_blocking.py --split <split> --blocker word --part i/n, upload parts/, terminate.
-# merge: download all parts, --merge n, upload final TSVs (+ .gz) + metadata + sample, terminate.
+# merge: download all parts, --merge n, record stats, upload final TSVs (+ .gz) + stats + metadata (+ sample), terminate.
 # The instance is launched with shutdown-behavior=terminate: every exit path ends in `shutdown`.
 MODE=__MODE__; SPLIT=__SPLIT__; EXP=__EXP__; PART=__PART__; N=__N__; BUCKET=__BUCKET__; RUN=__RUN__; COMMIT=__COMMIT__
 S3=s3://$BUCKET/$RUN
 TAG=$([ "$MODE" = merge ] && echo merge || printf 'part%02d' "$PART")
 LOG=/var/log/blocking.log
-export HOME=/root AWS_DEFAULT_REGION=ap-south-1
+export HOME=/root AWS_DEFAULT_REGION=__REGION__
 exec > >(tee -a $LOG) 2>&1
 
 up() { aws s3 cp $LOG $S3/logs/$TAG.log --only-show-errors || true; }
@@ -39,8 +39,8 @@ export ER_DATA_DIR=/opt/data/dataset ER_OUTPUT_DIR=/opt/out ER_CACHE_DIR=/opt/ou
        ER_N_JOBS=$(nproc) ER_GIT_COMMIT=$COMMIT PYTHONUNBUFFERED=1
 echo "== env ready $(date -u +%FT%TZ)"
 
+DATA=$([ "$SPLIT" = test ] && echo test || echo train)
 if [ "$MODE" = part ]; then
-  DATA=$([ "$SPLIT" = test ] && echo test || echo train)
   aws s3 cp s3://$BUCKET/data/${DATA}_parquet.tar - | tar -x -C /opt  # parquet cache + mtime-old TSV placeholders: no TSV parse
   .venv/bin/python scripts/aws/run_d2_blocking.py --split "$SPLIT" --blocker word --in-memory \
       --part "$PART/$N" --batch 50000 --exp-id "$EXP"
@@ -49,10 +49,21 @@ if [ "$MODE" = part ]; then
 else
   aws s3 cp $S3/parts/ artifacts/blocking/parts/ --recursive --only-show-errors
   .venv/bin/python scripts/aws/run_d2_blocking.py --merge "$N" --exp-id "$EXP"
+  # per-record competition stats over ALL S1 of the merged split (train+val together, or all test)
+  aws s3 cp s3://$BUCKET/data/${DATA}_parquet.tar - | tar -x -C /opt
+  if [ "$SPLIT" = test ]; then
+    .venv/bin/python execution/candidate_record_stats.py --split test \
+        --inputs artifacts/blocking/test_candidate_pairs.tsv --out artifacts/blocking/record_stats_test.parquet
+  else
+    .venv/bin/python execution/candidate_record_stats.py --split train \
+        --inputs artifacts/blocking/train_candidate_pairs.tsv artifacts/blocking/validation_candidate_pairs.tsv \
+        --out artifacts/blocking/record_stats_trainval.parquet
+  fi
   dnf install -y -q pigz
   cd artifacts/blocking
   for f in *_candidate_pairs.tsv; do [ "$f" = train_sample_candidate_pairs.tsv ] || pigz -k -1 "$f"; done
-  for f in *_candidate_pairs.tsv *_candidate_pairs.tsv.gz train_sample_s1_ids.csv blocking_metadata.json; do
+  sha256sum *_candidate_pairs.tsv record_stats_*.parquet > SHA256SUMS
+  for f in *_candidate_pairs.tsv *_candidate_pairs.tsv.gz record_stats_*.parquet SHA256SUMS train_sample_s1_ids.csv blocking_metadata.json; do
     if [ -f "$f" ]; then aws s3 cp "$f" $S3/final/$f --only-show-errors; fi
   done
   cd /opt/repo
