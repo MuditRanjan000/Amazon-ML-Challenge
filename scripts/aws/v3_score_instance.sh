@@ -30,9 +30,11 @@ echo "models: $MODELS"
 aws s3 cp $S3/__STATS__ /opt/w/stats.parquet --only-show-errors
 aws s3 cp $S3/__CANDS__ /opt/w/cands.tsv.gz --only-show-errors
 echo "== data ready $(date -u +%FT%TZ)"; free -m
-NP=$((__LAST__ - __FIRST__ + 1)); TH=$(( $(nproc) / NP )); [ $TH -ge 1 ] || TH=1
+NP=$((__LAST__ - __FIRST__ + 1)); MAXP=$(( $(nproc) < NP ? $(nproc) : NP ))  # at most one part per vCPU at a time
+TH=$(( $(nproc) / MAXP )); [ $TH -ge 1 ] || TH=1
 pids=()
 for i in $(seq __FIRST__ __LAST__); do
+  while [ "$(jobs -rp | wc -l)" -ge "$MAXP" ]; do sleep 5; done
   ( RAYON_NUM_THREADS=$TH OMP_NUM_THREADS=$TH .venv/bin/python execution/v3_pipeline.py score --cands /opt/w/cands.tsv.gz \
       --split __SPLIT__ --name __NAME__ --n-s1 __NS1__ --part $i/__N__ --K __K__ --model $MODELS \
       --stats /opt/w/stats.parquet --out /opt/w/out --threads $TH > /var/log/p$i.log 2>&1 \
