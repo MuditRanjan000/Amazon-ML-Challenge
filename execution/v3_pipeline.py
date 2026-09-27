@@ -458,6 +458,35 @@ def apply_test(a, m2, feats, best, t0):
              "pred_pairs": len(tp), "validator_pass": ok})
 
 
+def cmd_variants(a):
+    """Test-time decision variants from one stage-2 pass: per-country logit shifts of p2 before the tuned rule.
+    Test has ~23% more records per S1 than train (denser distractor twins), so val-tuned decisions are optimistic;
+    the leaderboard calibrates the shift. --variants '{"base": 0, "cons1": {"US": -0.3, "India": -0.6, "France": -0.9}}'"""
+    t0 = time.time()
+    saved = joblib.load(a.m2)
+    m2, feats, best = saved["m2"], saved["features"], saved["best"]
+    te = context(read_scored(a.scored, "test", a.K))
+    te = siblings(te, norm_keys("test", set(te["s1"]) | set(te["cand"])))
+    te["p2"] = m2.predict_proba(te[feats])[:, 1]
+    s1 = DataLoader().load_source("test", 1, columns=["entity_id", "country"])
+    cty = s1.set_index("entity_id")["country"].reindex(te["s1"]).to_numpy()
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    te[["s1", "cand", "rank", "p", "p2"]].assign(country=cty).to_parquet(out / "test_p2.parquet", index=False)
+    z = np.log(np.clip(te["p2"].to_numpy(), 1e-7, 1 - 1e-7) / np.clip(1 - te["p2"].to_numpy(), 1e-7, 1))
+    n_s1 = s1["country"].value_counts()
+    for name, shift in json.loads(a.variants).items():
+        d = (pd.Series(cty).map(shift).fillna(shift.get("*", 0)).to_numpy() if isinstance(shift, dict)
+             else np.full(len(te), float(shift)))
+        te["q"] = 1 / (1 + np.exp(-(z + d)))
+        tp = te[select(te, dict(best, prob="q"))]
+        SubmissionGenerator(out / name).generate(s1["entity_id"].tolist(), tp.rename(
+            columns={"s1": "source1_entity_id", "cand": "candidate_entity_id"}))
+        per = (pd.Series(cty[select(te, dict(best, prob="q"))]).value_counts() / n_s1).round(3).to_dict()
+        logging.info("variant %s shift=%s: %d pairs; per S1 by country %s", name, shift, len(tp), per)
+    logging.info("variants done in %.0fs", time.time() - t0)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -498,9 +527,15 @@ def main():
     s.add_argument("--reuse", action="store_true", help="skip val tuning; apply the saved m2<tag> + rule to test")
     s.add_argument("--tag", default="")
     s.add_argument("--out", default=str(config.OUTPUT_DIR / "submissions" / "V3"))
+    s = sub.add_parser("variants")
+    s.add_argument("--scored", required=True)
+    s.add_argument("--m2", required=True, help="m2<tag>.joblib saved by decide")
+    s.add_argument("--K", type=int, default=200)
+    s.add_argument("--variants", required=True, help='JSON {name: shift | {country: shift, "*": default}}')
+    s.add_argument("--out", required=True)
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    {"normalize": cmd_normalize, "train": cmd_train, "score": cmd_score, "decide": cmd_decide}[a.cmd](a)
+    {"normalize": cmd_normalize, "train": cmd_train, "score": cmd_score, "decide": cmd_decide, "variants": cmd_variants}[a.cmd](a)
 
 
 if __name__ == "__main__":
