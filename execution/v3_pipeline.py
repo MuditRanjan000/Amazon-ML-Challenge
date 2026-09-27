@@ -200,9 +200,13 @@ def cmd_score(a):
     assert pairs["s1"].nunique() == hi - lo, (pairs["s1"].nunique(), hi - lo)
     logging.info("part %d/%d: %d S1, %d pairs in %.0fs", i, n, hi - lo, len(pairs), time.time() - t0)
     ids = set(pairs["s1"]) | set(pairs["cand"])
-    bundle = joblib.load(a.model)
+    bundles = [joblib.load(m) for m in a.model.split(",")]  # several models -> average (simple ensemble)
     X = featurize(pairs, load_norm(a.split, ids), load_stats(a.stats, set(pairs["cand"])), workers=a.threads)
-    pairs["p"] = bundle["model"].predict_proba(X[bundle["features"]])[:, 1].astype("float32")
+    ps = [b["model"].predict_proba(X[b["features"]])[:, 1].astype("float32") for b in bundles]
+    pairs["p"] = np.mean(ps, axis=0).astype("float32")
+    if len(ps) > 1:
+        for j, q in enumerate(ps):
+            pairs[f"p_m{j}"] = q
     for c in KEEP_FEATURES:  # a few raw similarities for stage 2 (interactions with sibling support)
         pairs[c] = X[c].to_numpy()
     keep = pairs[pairs["p"] >= P_KEEP]
@@ -377,7 +381,7 @@ def cmd_decide(a):
         return apply_test(a, saved["m2"], saved["features"], saved["best"], t0)
     gt = DataLoader().load_ground_truth()
     train_ids, val_ids = create_validation_split(gt)
-    m1_sample = set(joblib.load(a.m1)["sample"])
+    m1_sample = set().union(*(joblib.load(m)["sample"] for m in a.m1.split(",")))  # never fit stage 2 on them
     tv = context(pd.concat([read_scored(a.scored, "train", a.K), read_scored(a.scored, "val", a.K)], ignore_index=True))
     tv = siblings(tv, norm_keys("train", set(tv["s1"]) | set(tv["cand"])))
     logging.info("trainval scored pairs %d in %.0fs", len(tv), time.time() - t0)

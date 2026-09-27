@@ -77,6 +77,38 @@ Every S1 in every split received candidates (0 empty), France included. The fina
 - **Fan-out:** add `--part i/n` per worker, then `--merge n`.
 - **Outputs:** `artifacts/blocking/*_candidate_pairs.tsv` + `blocking_metadata.json` (config, commit, sha256 per file).
 
+## Matcher v3 (two-stage GBDT + record-level decisions)
+*Owner: Aayush (built 27 Sep with Claude). Code: `src/entity_resolution/v3_match.py`, `execution/v3_pipeline.py`, AWS runners `scripts/aws/v3_*.sh`. All numbers are on the full frozen validation split with the official evaluator. Validation S1 compete with train S1 for the same records, exactly as on test.*
+
+**What the data taught us.** S2/S3 records are synthetic noisy copies of S1 entities:
+- Name noise: typos and digit substitutions (`Crysta1`, `HELI0S`), domain/handle forms (`crystallending.com`, `@helios`), legal-form variants (`LLC`/`[L.L.C.]`), word swaps, full transliteration (Devanagari/Kannada/Gujarati), gibberish replacement names at the exact address.
+- Address noise: component reordering, state names vs codes, native-script states, house/unit numbers perturbed (`2370` → `237`, `032/2`), dropped or replaced city, empty address.
+- Distractors (26% of records) are *twins* of real entities: same street with a different number, an added descriptive word (`Exports`, `Jewellers`, `North`), or a swapped legal form (`LLC` → `Co`, `Private` → `Public`).
+
+**Stage 1 (pair model).**
+- Features, vectorized with RapidFuzz `cpdist` (C++, multi-threaded) and numpy, per (S1, candidate):
+  - name: ratio, token-set, token-sort, partial, Jaro-Winkler, no-space ratio (domains), exact key;
+  - address: token-set/sort, partial, ratio, lengths;
+  - numbers: overlap, coverage, digit-string and first-number similarity;
+  - legal form: class sets, conflict, extra, missing;
+  - name tokens: extra and missing with typo tolerance, token rarity (gibberish detector);
+  - blocking: score, rank, ratio to the S1's top score;
+  - record competition over all S1: number of competing S1, is-best, margin.
+- Model: sklearn HistGradientBoosting (BSD), trained on sampled train S1 (seed 42) over their top-K candidates.
+
+**Stage 2 (context model).** Re-scores stage-1 probabilities with:
+- record-level competition: best probability of any *other* S1 for the same record, rank, sum;
+- S1-level context: rank, count above 0.5, max;
+- **sibling consensus**: probability mass of the S1's other candidates sharing this record's house number / name key / address key / number set. True copies agree with each other even where the S1 itself was perturbed; distractor twins don't.
+- Trained on train S1 that stage 1 never saw.
+
+**Decision.** One owner per record (every S2/S3 record belongs to at most one S1 in the ground truth). Then, per S1, the top-k candidates that maximise plug-in expected F0.5 (`E[F_k] ≈ 1.25·Σq_i / (0.25·Σq + k)`, empty when `Π(1−q_i)` is larger). The rule is tuned on validation.
+
+| Run | Stage 1 | K | Val F0.5 | Precision | Recall | Singleton acc. |
+|---|---|---|---|---|---|---|
+| LR-43 (reference) | logistic, 43 feats, 2.5k S1 | 200 | 0.8554 | 0.905 | 0.771 | 0.771 |
+| **V3_r1** | 36 feats, 100k S1 | 100 | **0.9634** | 0.980 | 0.925 | 0.932 |
+
 ## Model Architecture
 *(To be populated by Ashank)*
 

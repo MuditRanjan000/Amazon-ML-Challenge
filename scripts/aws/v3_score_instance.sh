@@ -23,7 +23,10 @@ cd /opt/repo && uv venv -q -p 3.13 .venv && uv pip install -q -p .venv/bin/pytho
 export ER_OUTPUT_DIR=/opt/w ER_CACHE_DIR=/opt/w/cache ER_GIT_COMMIT=__COMMIT__ PYTHONUNBUFFERED=1
 mkdir -p /opt/w/v3
 aws s3 cp $R/norm___SPLIT__.parquet /opt/w/v3/norm___SPLIT__.parquet --only-show-errors
-aws s3 cp $R/m1.joblib /opt/w/m1.joblib --only-show-errors
+aws s3 cp $R/tokdf___SPLIT__.parquet /opt/w/v3/tokdf___SPLIT__.parquet --only-show-errors || true
+MODELS=""; for m in $(aws s3 ls $R/ | awk '{print $4}' | grep -E '^m1.*\.joblib$'); do
+  aws s3 cp $R/$m /opt/w/$m --only-show-errors; MODELS="${MODELS:+$MODELS,}/opt/w/$m"; done
+echo "models: $MODELS"
 aws s3 cp $S3/__STATS__ /opt/w/stats.parquet --only-show-errors
 aws s3 cp $S3/__CANDS__ /opt/w/cands.tsv.gz --only-show-errors
 echo "== data ready $(date -u +%FT%TZ)"; free -m
@@ -31,7 +34,7 @@ NP=$((__LAST__ - __FIRST__ + 1)); TH=$(( $(nproc) / NP )); [ $TH -ge 1 ] || TH=1
 pids=()
 for i in $(seq __FIRST__ __LAST__); do
   ( RAYON_NUM_THREADS=$TH OMP_NUM_THREADS=$TH .venv/bin/python execution/v3_pipeline.py score --cands /opt/w/cands.tsv.gz \
-      --split __SPLIT__ --name __NAME__ --n-s1 __NS1__ --part $i/__N__ --K __K__ --model /opt/w/m1.joblib \
+      --split __SPLIT__ --name __NAME__ --n-s1 __NS1__ --part $i/__N__ --K __K__ --model $MODELS \
       --stats /opt/w/stats.parquet --out /opt/w/out --threads $TH > /var/log/p$i.log 2>&1 \
     && aws s3 cp /opt/w/out/__NAME__.part$(printf %02d $i)of__N__.parquet $R/scored/ --only-show-errors \
     && echo ok | aws s3 cp - $R/status/__NAME__.p$(printf %02d $i).DONE --only-show-errors \
