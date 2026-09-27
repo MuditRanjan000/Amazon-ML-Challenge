@@ -12,7 +12,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --bucket) BUCKET=$2; shift 2 ;; --run) RUN=$2; shift 2 ;; --name) NAME=$2; shift 2 ;;
     --n) N=$2; shift 2 ;; --per) PER=$2; shift 2 ;; --type) TYPE=$2; shift 2 ;; --spot) SPOT=1; shift ;;
-    --K) K=$2; shift 2 ;; --from) FROM=$2; shift 2 ;; --to) TO=$2; shift 2 ;; --cmd-file) CMDF=$2; shift 2 ;;
+    --K) K=$2; shift 2 ;; --from) FROM=$2; shift 2 ;; --to) TO=$2; shift 2 ;; --cmd-file) CMDF=$2; shift 2 ;; --stats) STATS_OVERRIDE=$2; shift 2 ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
 done
@@ -28,6 +28,7 @@ case "$NAME" in
   test)  SPLIT=test; CANDS=run-90b0553-test/final/test_candidate_pairs.tsv.gz; STATS=run-90b0553-test/final/record_stats_test.parquet; NS1=1732544 ;;
   *) NS1=0 ;;
 esac
+[ -n "${STATS_OVERRIDE:-}" ] && STATS=$STATS_OVERRIDE  # e.g. v3/data/record_stats_trainval_drop20.parquet (orphan simulation)
 
 prep() {
   git archive --format=tar.gz -o "$TMP/code.tar.gz" HEAD
