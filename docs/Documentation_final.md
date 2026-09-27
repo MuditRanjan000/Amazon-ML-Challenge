@@ -157,10 +157,11 @@ We retrieve, for every Source-1 entity, its 200 nearest S2/S3 records under a co
   | Check | Val F0.5 |
   |---|---|
   | V3_r1 unchanged (stage-1 stats unshifted, stage-2 context shifted) | 0.9626 (vs 0.9634) |
-  | [r3 K=200 stage 2 on the fully shifted val] | [SHIFT_A] |
-  | [stage 1 + stage 2 trained under the shift] | [SHIFT_B] |
+  | r3 K=200 stage 2, stage 1 rescored with shifted stats (vs 0.9751 unshifted) | 0.9696 (P 0.981, R 0.946, singleton 0.936); best logit shift −0.5 → 0.9704 |
+  | r6: stage 1 trained under the shift (300k S1, dropped S1 excluded), stage 2 fit under the shift | 0.9766 (P 0.988, R 0.950, singleton 0.968) |
+  | ens3shift: stage 1 = r3 + r4 + r6, stage 2 fit and rule tuned under the shift | 0.9767 (P 0.989, R 0.949, singleton 0.966) |
 
-  Shifting only the stage-2 context barely moves the score; the stage-1 competition features carry the effect, which is why the full simulation rescores stage 1 with shifted statistics.
+  Shifting only the stage-2 context barely moves the score; the stage-1 competition features carry the effect. With stage 1 rescored under the shift, the unadapted model loses 0.0055, mostly in precision and singleton accuracy, the same direction as the test gap. Training both stages under the shift recovers it (0.9767 on the shifted val).
 - **Test-time calibration.** From one stage-2 pass we also write variants with per-country logit shifts of the stage-2 probability before the tuned rule (`variants`). On validation, V3_r1's F0.5 by shift: +0.5 0.9611, 0 0.9626, −0.5 0.9623, −1.0 0.9609, −1.5 0.9581, −2.0 0.9534, −3.0 0.9388. Mild conservative shifts cost almost nothing on validation and protect precision on the denser test distribution. The final submission applies the validation-tuned rule without a shift or a cap.
 
 ---
