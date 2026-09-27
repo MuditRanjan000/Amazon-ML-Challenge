@@ -432,15 +432,25 @@ def cmd_decide(a):
     tk = truth_keys(gt)
     tv["y"] = np.fromiter((k in tk for k in zip(tv["s1"], tv["cand"])), bool, len(tv))
     is_val = tv["s1"].isin(val_ids).to_numpy()
-    if a.eval_m2:  # measure a saved stage 2 + its rule on this (e.g. shifted) val, no refit
-        saved = joblib.load(a.eval_m2)
-        m2, feats = saved["m2"], saved["features"]
-        tv["p2"] = m2.predict_proba(tv[feats])[:, 1].astype(np.float32)
-        val_gt = gt[gt["source1_entity_id"].isin(val_ids)].reset_index(drop=True)
-        off = official(val_gt, tv[is_val][select(tv, saved["best"], rows=is_val)])
-        print("saved rule", saved["best"], "on this val:", json.dumps(off))
+    val_gt = gt[gt["source1_entity_id"].isin(val_ids)].reset_index(drop=True)
+    s1_index = pd.Index(val_gt["source1_entity_id"])
+    true = explode_id_lists(val_gt, "matched_entity_ids")
+    n_true = np.bincount(s1_index.get_indexer(true["source1_entity_id"]), minlength=len(s1_index))
+    codes, hit = s1_index.get_indexer(tv.loc[is_val, "s1"]), tv.loc[is_val, "y"].to_numpy()
+    if a.eval_m2:  # measure a saved stage 2 + its rule on this (e.g. shifted) val, no refit, and the logit shifts
+        saved = joblib.load(a.eval_m2)  # of p2 that `variants` applies before the rule
+        rule = saved["best"]
+        p2 = tv["p2"] = saved["m2"].predict_proba(tv[saved["features"]])[:, 1]
+        off = official(val_gt, tv[is_val][select(tv, rule, rows=is_val)])
+        print("saved rule", rule, "on this val:", json.dumps(off))
+        z = np.log(np.clip(p2, 1e-7, 1 - 1e-7) / np.clip(1 - p2, 1e-7, 1))
+        shifts = {}
+        for d in (0.5, 0.0, -0.5, -1.0, -1.5, -2.0, -3.0, -4.0):
+            tv["q"] = 1 / (1 + np.exp(-(z + d)))
+            shifts[d] = round(fast_f05(codes, n_true, hit, select(tv, dict(rule, prob="q"), rows=is_val)), 5)
+        print("logit shift of p2 -> val F0.5 (saved rule):", shifts)
         log_run({"experiment_id": "V3" + a.tag, "stage": "eval-m2", "m2": a.eval_m2, "drop_s1": a.drop_s1,
-                 "K": a.K, "rule": saved["best"], "official": off})
+                 "K": a.K, "rule": rule, "official": off, "shift_f05": shifts})
         return
     fit_s1 = np.array(sorted(set(tv.loc[~is_val, "s1"]) - m1_sample))
     fit_s1 = set(np.random.default_rng(7).choice(fit_s1, min(a.s2_n, len(fit_s1)), replace=False))
@@ -452,11 +462,6 @@ def cmd_decide(a):
     tv["p2"] = m2.predict_proba(tv[feats])[:, 1].astype(np.float32)
     logging.info("stage 2 fit on %d pairs (%d S1) in %.0fs", fit.sum(), len(fit_s1), time.time() - t0)
 
-    val_gt = gt[gt["source1_entity_id"].isin(val_ids)].reset_index(drop=True)
-    s1_index = pd.Index(val_gt["source1_entity_id"])
-    true = explode_id_lists(val_gt, "matched_entity_ids")
-    n_true = np.bincount(s1_index.get_indexer(true["source1_entity_id"]), minlength=len(s1_index))
-    codes, hit = s1_index.get_indexer(tv.loc[is_val, "s1"]), tv.loc[is_val, "y"].to_numpy()
     rules = [{"prob": c, "kind": "thr", "x": float(t), "owner": o}
              for c in ("p", "p2") for t in np.round(np.arange(0.2, 0.96, 0.025), 3) for o in (True, False)]
     rules += [{"prob": c, "kind": "efo", "x": float(b), "owner": o}
