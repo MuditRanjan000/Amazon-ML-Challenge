@@ -25,3 +25,8 @@ def test_context_and_owner():
     c = v3.context(df)
     assert np.allclose(c.rec_other, [0.7, 0, 0.9, 0, 0.9]) and list(c.rec_rank) == [1, 1, 3, 1, 2]
     assert list(v3.owner_mask(df.s1.values, df.cand.values, df.p.values)) == [True, True, False, True, False]
+
+
+def test_efo_picks_expected_f05_optimum():
+    s1, q = np.array(list("aaabbc")), np.array([0.9, 0.6, 0.1, 0.05, 0.02, 0.97])
+    assert list(v3.efo_mask(s1, q)) == [True, False, False, False, False, True]  # b: empty beats any pick

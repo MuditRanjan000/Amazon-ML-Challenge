@@ -150,10 +150,10 @@ def cmd_train(a):
     m.fit(X, y)
     V3.mkdir(parents=True, exist_ok=True)
     joblib.dump({"model": m, "features": list(X.columns), "K": a.K, "n_s1": a.n_s1, "sample": sorted(sample)},
-                V3 / "m1.joblib")
+                V3 / f"m1{a.tag}.joblib")
     logging.info("trained m1 in %.0fs", time.time() - t0)
     # quick check on a val sample (competitors restricted to the sample: optimistic for the owner rule)
-    vs = set(rng.choice(sorted(val_ids), a.eval_n, replace=False))
+    vs = set(np.random.default_rng(43).choice(sorted(val_ids), a.eval_n, replace=False))  # fixed across runs
     vp = stream_pairs(a.val_cands, a.K, s1_keep=vs)
     vids = set(vp["s1"]) | set(vp["cand"])
     vp["p"] = m.predict_proba(featurize(vp, load_norm("train", vids), load_stats(a.stats, set(vp["cand"]))))[:, 1]
@@ -163,7 +163,7 @@ def cmd_train(a):
     for t in (0.3, 0.4, 0.5, 0.6, 0.7, 0.8):
         res[t] = (official(gsub, vp[vp["p"] >= t])["macro_f05"], official(gsub, vp[(vp["p"] >= t) & own])["macro_f05"])
         logging.info("val-sample t=%.1f  pairwise %.4f  owner %.4f", t, *res[t])
-    log_run({"experiment_id": "V3-M1", "stage": "train", "blocking": "BLK-020", "K": a.K, "n_s1": a.n_s1,
+    log_run({"experiment_id": "V3-M1" + a.tag, "stage": "train", "blocking": "BLK-020", "K": a.K, "n_s1": a.n_s1,
              "iters": a.iters, "features": list(X.columns), "val_sample": a.eval_n,
              "val_sample_f05": {str(k): v for k, v in res.items()}, "runtime_s": round(time.time() - t0, 1)})
 
@@ -180,6 +180,8 @@ def cmd_score(a):
     bundle = joblib.load(a.model)
     X = featurize(pairs, load_norm(a.split, ids), load_stats(a.stats, set(pairs["cand"])), workers=a.threads)
     pairs["p"] = bundle["model"].predict_proba(X[bundle["features"]])[:, 1].astype("float32")
+    for c in KEEP_FEATURES:  # a few raw similarities for stage 2 (interactions with sibling support)
+        pairs[c] = X[c].to_numpy()
     keep = pairs[pairs["p"] >= P_KEEP]
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -187,6 +189,8 @@ def cmd_score(a):
     logging.info("part %d/%d: kept %d pairs (p>=%.2f) in %.0fs", i, n, len(keep), P_KEEP, time.time() - t0)
 
 
+KEEP_FEATURES = ["n_tset", "n_ratio", "a_tset", "num_cov_a", "num_cov_b", "dig_ratio", "n1_in_b", "b_alen",
+                 "c_is_best", "c_margin"]
 S2_FEATURES = ["p", "score", "rank", "rec_n", "rec_sum", "rec_rank", "rec_other", "p_minus_other",
                "s1_n", "s1_n05", "s1_sum", "s1_max", "s1_rank", "p_over_s1max"]
 
@@ -223,6 +227,38 @@ def context(df):
     return pd.concat([df, out], axis=1)
 
 
+SIB_KEYS = ("n1", "nn", "na", "nums")
+S2_FEATURES += [f"{k}_{x}" for k in SIB_KEYS for x in ("sup", "cnt", "share", "eq_s1")]
+
+
+def siblings(df, norm):
+    """Sibling consensus: the true records of an S1 are independent noisy copies of one entity and agree with
+    each other (house number, name/address key) even where the S1 itself was perturbed; distractor twins don't.
+    For each key: p-mass / count of the S1's OTHER candidates sharing r's value, its share, and equality with S1."""
+    s = pd.factorize(df["s1"])[0].astype(np.int64)
+    p = df["p"].to_numpy(np.float64)
+    s1_sum = np.bincount(s, weights=p)[s]
+    out = {}
+    for k in SIB_KEYS:
+        val = norm[k].reindex(df["cand"]).fillna("").to_numpy()
+        empty = val == ""
+        kc = pd.factorize(val)[0].astype(np.int64)
+        kk = pd.factorize(s * (kc.max() + 2) + kc)[0]
+        sup = np.bincount(kk, weights=p)[kk] - p
+        out[f"{k}_sup"] = np.where(empty, -1, sup)
+        out[f"{k}_cnt"] = np.where(empty, -1, np.bincount(kk)[kk] - 1)
+        out[f"{k}_share"] = np.where(empty, -1, sup / np.maximum(s1_sum - p, 1e-6))
+        out[f"{k}_eq_s1"] = (val == norm[k].reindex(df["s1"]).fillna("").to_numpy()) & ~empty
+    return pd.concat([df, pd.DataFrame({k: np.asarray(v, np.float32) for k, v in out.items()}, index=df.index)],
+                     axis=1)
+
+
+def norm_keys(split, ids):
+    t = pq.read_table(V3 / f"norm_{split}.parquet", columns=["entity_id", *SIB_KEYS],
+                      filters=[("entity_id", "in", list(ids))])
+    return t.to_pandas().set_index("entity_id")
+
+
 def read_scored(d, name):
     parts = sorted(Path(d).glob(f"{name}.part*.parquet"))
     assert parts, f"no {name} parts in {d}"
@@ -233,6 +269,46 @@ def decisions(df, prob, t):
     """One owner per record on `prob`, then threshold."""
     own = owner_mask(df["s1"].to_numpy(), df["cand"].to_numpy(), prob)
     return own & (prob >= t)
+
+
+def efo_mask(s1, q, bias=0.0):
+    """Per S1, predict the top-k candidates (by q) that maximize plug-in expected F0.5:
+    E[F_k] ~ 1.25*sum_{i<=k} q_i / (0.25*sum_all q + k + bias), and E[F_0] = prod(1 - q_i) (empty = singleton).
+    `bias` (tuned on val) makes the rule more conservative (> 0) or more generous (< 0)."""
+    s = pd.factorize(s1)[0]
+    order = np.lexsort((-q, s))
+    ss, qs = s[order], q[order].astype(np.float64)
+    start = np.r_[True, ss[1:] != ss[:-1]]
+    grp = np.cumsum(start) - 1
+    st = np.flatnonzero(start)
+    csum = np.cumsum(qs)
+    tp = csum - np.r_[0, csum[st[1:] - 1]][grp]                  # within-group cumulative q
+    total = np.add.reduceat(qs, st)[grp]
+    k = np.arange(len(qs)) - st[grp] + 1
+    ef = 1.25 * tp / (0.25 * total + k + bias)
+    f0 = np.exp(np.add.reduceat(np.log1p(-np.minimum(qs, 1 - 1e-6)), st))  # P(no true match among candidates)
+    best_k_val = np.maximum.reduceat(ef, st)
+    best_pos = pd.Series(ef).groupby(grp).idxmax().to_numpy()    # first argmax position per group
+    kstar = np.where(best_k_val > f0, k[best_pos], 0)
+    m = np.zeros(len(q), bool)
+    m[order[k <= kstar[grp]]] = True
+    return m
+
+
+def owned_q(df, prob, owner):
+    """The rule's score per pair; with `owner`, 0 unless the S1 is the record's top-`prob` S1 (whole universe)."""
+    q = df[prob].to_numpy(np.float64)
+    return np.where(owner_mask(df["s1"].to_numpy(), df["cand"].to_numpy(), q), q, 0.0) if owner else q
+
+
+def select(df, r, q=None, rows=None):
+    """Apply a decision rule {prob, kind: thr|efo, x: threshold|bias, owner}. Owner is decided over all of df;
+    the rule itself is per S1, so it can be evaluated on a subset of S1 rows (`rows`)."""
+    q = owned_q(df, r["prob"], r["owner"]) if q is None else q
+    s1 = df["s1"].to_numpy()
+    if rows is not None:
+        q, s1 = q[rows], s1[rows]
+    return q >= r["x"] if r["kind"] == "thr" else efo_mask(s1, q, r["x"]) & (q > 0)
 
 
 def fast_f05(s1_codes, n_true, hit, m):
@@ -274,8 +350,9 @@ def cmd_decide(a):
     t0 = time.time()
     gt = DataLoader().load_ground_truth()
     train_ids, val_ids = create_validation_split(gt)
-    m1_sample = set(joblib.load(V3 / "m1.joblib")["sample"])
+    m1_sample = set(joblib.load(a.m1)["sample"])
     tv = context(pd.concat([read_scored(a.scored, "train"), read_scored(a.scored, "val")], ignore_index=True))
+    tv = siblings(tv, norm_keys("train", set(tv["s1"]) | set(tv["cand"])))
     logging.info("trainval scored pairs %d in %.0fs", len(tv), time.time() - t0)
     tk = truth_keys(gt)
     tv["y"] = np.fromiter((k in tk for k in zip(tv["s1"], tv["cand"])), bool, len(tv))
@@ -285,40 +362,39 @@ def cmd_decide(a):
     fit = tv["s1"].isin(fit_s1).to_numpy()
     m2 = HistGradientBoostingClassifier(max_iter=300, learning_rate=0.08, max_leaf_nodes=63, min_samples_leaf=200,
                                         random_state=42, early_stopping=False)
-    m2.fit(tv.loc[fit, S2_FEATURES], tv.loc[fit, "y"])
-    tv["p2"] = m2.predict_proba(tv[S2_FEATURES])[:, 1].astype(np.float32)
+    feats = S2_FEATURES + [c for c in KEEP_FEATURES if c in tv.columns]
+    m2.fit(tv.loc[fit, feats], tv.loc[fit, "y"])
+    tv["p2"] = m2.predict_proba(tv[feats])[:, 1].astype(np.float32)
     logging.info("stage 2 fit on %d pairs (%d S1) in %.0fs", fit.sum(), len(fit_s1), time.time() - t0)
 
     val_gt = gt[gt["source1_entity_id"].isin(val_ids)].reset_index(drop=True)
     s1_index = pd.Index(val_gt["source1_entity_id"])
     true = explode_id_lists(val_gt, "matched_entity_ids")
     n_true = np.bincount(s1_index.get_indexer(true["source1_entity_id"]), minlength=len(s1_index))
-    v = tv[is_val]
-    codes, hit = s1_index.get_indexer(v["s1"]), v["y"].to_numpy()
-    res = []
-    for col in ("p", "p2"):
-        own = owner_mask(tv["s1"].to_numpy(), tv["cand"].to_numpy(), tv[col].to_numpy())[is_val]
-        for t in np.round(np.arange(0.2, 0.96, 0.025), 3):
-            for use_owner in (True, False):
-                m = (v[col].to_numpy() >= t) & (own if use_owner else True)
-                res.append({"prob": col, "t": float(t), "owner": use_owner, "f05": fast_f05(codes, n_true, hit, m)})
+    codes, hit = s1_index.get_indexer(tv.loc[is_val, "s1"]), tv.loc[is_val, "y"].to_numpy()
+    rules = [{"prob": c, "kind": "thr", "x": float(t), "owner": o}
+             for c in ("p", "p2") for t in np.round(np.arange(0.2, 0.96, 0.025), 3) for o in (True, False)]
+    rules += [{"prob": c, "kind": "efo", "x": float(b), "owner": o}
+              for c in ("p", "p2") for b in np.round(np.arange(-0.6, 1.61, 0.2), 2) for o in (True, False)]
+    qs = {(c, o): owned_q(tv, c, o) for c in ("p", "p2") for o in (True, False)}
+    res = [dict(r, f05=fast_f05(codes, n_true, hit, select(tv, r, qs[r["prob"], r["owner"]], is_val)))
+           for r in rules]
     res = pd.DataFrame(res).sort_values("f05", ascending=False)
-    print(res.head(12).to_string(index=False))
-    best = res.iloc[0]
-    own = owner_mask(tv["s1"].to_numpy(), tv["cand"].to_numpy(), tv[best.prob].to_numpy())[is_val]
-    pred = v[(v[best.prob] >= best.t) & (own if best.owner else True)]
+    print(res.head(15).to_string(index=False))
+    best = res.iloc[0].to_dict()
+    pred = tv[is_val][select(tv, best, rows=is_val)]
     off = official(val_gt, pred)
     print("official evaluator (full frozen val):", json.dumps(off))
-    joblib.dump({"m2": m2, "best": best.to_dict()}, V3 / "m2.joblib")
-    log_run({"experiment_id": "V3", "stage": "decide-val", "blocking": "BLK-020", "K": a.K,
-             "best": best.to_dict(), "official": off, "top": res.head(12).to_dict("records"),
+    joblib.dump({"m2": m2, "features": feats, "best": best}, V3 / f"m2{a.tag}.joblib")
+    log_run({"experiment_id": "V3" + a.tag, "stage": "decide-val", "blocking": "BLK-020", "K": a.K,
+             "best": best, "official": off, "top": res.head(12).to_dict("records"),
              "runtime_s": round(time.time() - t0, 1)})
     if not a.test_cands:
         return
     te = context(read_scored(a.scored, "test"))
-    te["p2"] = m2.predict_proba(te[S2_FEATURES])[:, 1].astype(np.float32)
-    own = owner_mask(te["s1"].to_numpy(), te["cand"].to_numpy(), te[best.prob].to_numpy())
-    tp = te[(te[best.prob] >= best.t) & (own if best.owner else True)]
+    te = siblings(te, norm_keys("test", set(te["s1"]) | set(te["cand"])))
+    te["p2"] = m2.predict_proba(te[feats])[:, 1].astype(np.float32)
+    tp = te[select(te, best)]
     out = Path(a.out)
     s1_ids = DataLoader().load_source("test", 1, columns=["entity_id"])["entity_id"].tolist()
     match = SubmissionGenerator(out).generate(s1_ids, tp.rename(columns={"s1": "source1_entity_id",
@@ -327,7 +403,7 @@ def cmd_decide(a):
     logging.info("test: %d predicted pairs on %d S1; candidate rows %d; %.0fs", len(tp), tp["s1"].nunique(), n_c,
                  time.time() - t0)
     ok = SubmissionValidator().validate(match, out / "candidate_pairs.tsv", check_ids=False)
-    log_run({"experiment_id": "V3", "stage": "decide-test", "K": a.K, "best": best.to_dict(),
+    log_run({"experiment_id": "V3" + a.tag, "stage": "decide-test", "K": a.K, "best": best,
              "pred_pairs": len(tp), "validator_pass": ok})
 
 
@@ -345,6 +421,7 @@ def main():
     s.add_argument("--eval-n", type=int, default=20_000)
     s.add_argument("--K", type=int, default=100)
     s.add_argument("--iters", type=int, default=400)
+    s.add_argument("--tag", default="", help="model file suffix: output/v3/m1<tag>.joblib")
     s = sub.add_parser("score")
     s.add_argument("--cands", required=True)
     s.add_argument("--split", required=True, choices=["train", "test"], help="which normalized table")
@@ -361,6 +438,8 @@ def main():
     s.add_argument("--test-cands", help="test candidate TSV(.gz); omit to only tune on val")
     s.add_argument("--K", type=int, default=100)
     s.add_argument("--s2-n", type=int, default=400_000, help="train S1 (not in the m1 sample) for stage 2")
+    s.add_argument("--m1", default=str(V3 / "m1.joblib"), help="the stage-1 model the scored parts came from")
+    s.add_argument("--tag", default="")
     s.add_argument("--out", default=str(config.OUTPUT_DIR / "submissions" / "V3"))
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

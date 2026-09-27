@@ -46,6 +46,20 @@ _DIGITS = re.compile(r"\d+")
 _LEET = str.maketrans("013457", "oleast")
 
 
+LEGAL_CLASS = {"private": "pvt", "pvt": "pvt", "pvtltd": "pvt", "limited": "ltd", "limite": "ltd", "ltd": "ltd",
+               "llp": "llp", "llc": "llc", "inc": "inc", "incorporated": "inc", "corp": "corp",
+               "corporation": "corp", "co": "co", "company": "co", "companies": "co", "pc": "pc", "lp": "lp",
+               "plc": "plc", "public": "public", "gmbh": "gmbh", "sa": "sa", "sas": "sas", "sarl": "sarl",
+               "eurl": "eurl", "sarlu": "sarl"}
+
+
+def legal_classes(s: str) -> str:
+    """Sorted legal-form classes in a name ('l l c' counts as llc). Distractors often swap the legal form."""
+    s = _NONALNUM.sub(" ", anyascii(s).lower())
+    s = s.replace("l l c", "llc").replace("l l p", "llp")
+    return " ".join(sorted({LEGAL_CLASS[t] for t in s.split() if t in LEGAL_CLASS}))
+
+
 def norm_name(s: str) -> str:
     s = _NONALNUM.sub(" ", _DOMAIN.sub(" ", anyascii(s).lower()))
     toks = [t.translate(_LEET) if _ALPHA.search(t) else t for t in s.split()]
@@ -64,13 +78,13 @@ def _norm_chunk(args):
     for n, a in zip(names, addrs):
         nums = [x.lstrip("0") or "0" for x in _DIGITS.findall(a)]
         out.append((norm_name(n), norm_addr(a), " ".join(sorted(set(nums))), "".join(nums),
-                    nums[0] if nums else "", not n.isascii()))
+                    nums[0] if nums else "", not n.isascii(), legal_classes(n)))
     return out
 
 
 def _norm_frame(args):
     ids, names, addrs = args
-    out = pd.DataFrame(_norm_chunk((names, addrs)), columns=["nn", "na", "nums", "dig", "n1", "nonlatin"])
+    out = pd.DataFrame(_norm_chunk((names, addrs)), columns=["nn", "na", "nums", "dig", "n1", "nonlatin", "lg"])
     out.insert(0, "entity_id", ids)
     return out
 
@@ -91,6 +105,21 @@ def iter_normalized(df: pd.DataFrame, processes: int = 0, chunk: int = 100_000):
 def normalize_records(df: pd.DataFrame, processes: int = 0, chunk: int = 100_000) -> pd.DataFrame:
     """df: entity_id, business_name, business_address -> entity_id + normalized columns (order kept)."""
     return pd.concat(list(iter_normalized(df, processes, chunk)), ignore_index=True)
+
+
+def token_diff(an, bn, tol=65):
+    """Per pair: record-name tokens absent from the S1 name (typo-tolerant), S1 tokens absent from the record,
+    and the extra tokens' total length. Distractors ADD descriptive words; true copies mostly drop or garble them."""
+    ex = np.zeros(len(an), np.float32); ms = np.zeros(len(an), np.float32); exl = np.zeros(len(an), np.float32)
+    for i, (x, y) in enumerate(zip(an, bn)):
+        a, b = set(x.split()), set(y.split())
+        e, m = b - a, a - b
+        if e:
+            e = [t for t in e if not a or max(fuzz.ratio(t, u) for u in a) < tol]
+            ex[i], exl[i] = len(e), sum(map(len, e))
+        if m:
+            ms[i] = sum(1 for t in m if not b or max(fuzz.ratio(t, u) for u in b) < tol)
+    return ex, ms, exl
 
 
 def _cp(a, b, scorer, workers):
@@ -134,6 +163,19 @@ def pair_features(ia, ib, A: pd.DataFrame, B: pd.DataFrame, score, rank, s1_top,
     f["n1_in_b"] = np.fromiter((x != "" and x in y.split() for x, y in zip(a1, nb_)), np.float32, len(a1))
     f["a_nonlatin"] = A["nonlatin"].to_numpy()[ia]
     f["b_nonlatin"] = B["nonlatin"].to_numpy()[ib]
+    # legal form: distractor twins often swap it (LLC -> Co, Private -> Public); true copies keep or drop it
+    if "lg" in A.columns:
+        la_, lb_ = A["lg"].to_numpy()[ia], B["lg"].to_numpy()[ib]
+        sa, sb = [set(x.split()) for x in la_], [set(y.split()) for y in lb_]
+        f["lg_a_n"] = np.fromiter((len(x) for x in sa), np.float32, len(sa))
+        f["lg_b_n"] = np.fromiter((len(y) for y in sb), np.float32, len(sb))
+        f["lg_eq"] = la_ == lb_
+        f["lg_b_extra"] = np.fromiter((len(y - x) for x, y in zip(sa, sb)), np.float32, len(sa))
+        f["lg_a_miss"] = np.fromiter((len(x - y) for x, y in zip(sa, sb)), np.float32, len(sa))
+        f["lg_conflict"] = np.fromiter((bool(x) and bool(y) and not (x & y) for x, y in zip(sa, sb)), np.float32,
+                                       len(sa))
+        ex, ms, exl = token_diff(an, bn)
+        f["nm_extra_b"], f["nm_miss_a"], f["nm_extra_len"] = ex, ms, exl
     # competition for the record across all S1 of the split
     f["c_n"] = st_n
     f["c_is_best"] = st_is_best
