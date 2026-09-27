@@ -167,7 +167,7 @@ def cmd_train(a):
     ids = set(pairs["s1"]) | set(pairs["cand"])
     X = featurize(pairs, load_norm("train", ids), load_stats(a.stats, set(pairs["cand"])))
     logging.info("features %s pos %.4f in %.0fs", X.shape, y.mean(), time.time() - t0)
-    m = HistGradientBoostingClassifier(max_iter=a.iters, learning_rate=0.08, max_leaf_nodes=127,
+    m = HistGradientBoostingClassifier(max_iter=a.iters, learning_rate=a.lr, max_leaf_nodes=a.leaves,
                                        min_samples_leaf=200, l2_regularization=1.0, random_state=42,
                                        early_stopping=False)
     m.fit(X, y, sample_weight=w)
@@ -474,6 +474,8 @@ def main():
     s.add_argument("--iters", type=int, default=400)
     s.add_argument("--tag", default="", help="model file suffix: output/v3/m1<tag>.joblib")
     s.add_argument("--deep-neg-keep", type=float, default=1.0, help="keep this share of rank>100 negatives")
+    s.add_argument("--lr", type=float, default=0.08)
+    s.add_argument("--leaves", type=int, default=127)
     s = sub.add_parser("score")
     s.add_argument("--cands", required=True)
     s.add_argument("--split", required=True, choices=["train", "test"], help="which normalized table")
