@@ -11,7 +11,7 @@ We retrieve, for every Source-1 entity, its 200 nearest S2/S3 records under a co
 - **Stage 1** scores each pair on fuzzy name, address, number, legal-form and name-rarity features.
 - **Stage 2** re-scores each pair using its context: how the record's other S1 compete for it, and whether the S1's other candidates agree with it ("sibling consensus").
 - **Decisions** enforce the many-to-one structure: each record goes to at most one S1. Each S1 then keeps the candidates that maximize expected F0.5.
-- **Score:** frozen validation F0.5 is **[FINAL_VAL_F05]** (official evaluator), against 0.855 for our logistic-regression baseline.
+- **Score:** frozen validation F0.5 is **0.9779** (official evaluator), against 0.855 for our logistic-regression baseline.
 
 ---
 
@@ -57,7 +57,7 @@ We retrieve, for every Source-1 entity, its 200 nearest S2/S3 records under a co
   - exact cosine top-200 per S1 via sparse top-k matrix multiplication (`sparse_dot_topn`).
 - **Candidate pairs generated:**
   - test: 346,508,800 (1,732,544 S1 × 200) from blocking;
-  - `candidate_pairs.tsv` = the rank ≤ **[FINAL_K]** subset the matcher scored.
+  - `candidate_pairs.tsv` = the rank ≤ **200** subset (346,508,800 pairs) the matcher scored.
 - **How we ensured true matches were not lost:**
   - The oracle-ceiling F0.5 was measured on the frozen validation split:
     - K=100: 0.9897;
@@ -92,7 +92,7 @@ We retrieve, for every Source-1 entity, its 200 nearest S2/S3 records under a co
     - sibling consensus: the probability mass, count and share of the S1's other candidates sharing this record's house number, name key, address key or number set, plus equality with the S1 itself.
 
 **Model type:**
-- scikit-learn HistGradientBoosting (BSD-3), two stages; stage 1 is an average of **[N_MODELS]** models.
+- scikit-learn HistGradientBoosting (BSD-3), two stages; stage 1 is an average of **2** models (r3: 200k train S1, top-100 candidates, 45 features; r4: 150k train S1, top-200, 49 features, rank > 100 negatives subsampled to 25% and reweighted).
 - Trained on train-split S1 only (seed 42); stage 2 is trained on train S1 unseen by stage 1.
 - Scoring runs as an AWS fan-out over contiguous S1 slices; a full train+val+test pass takes about 15 minutes.
 
@@ -116,11 +116,11 @@ We retrieve, for every Source-1 entity, its 200 nearest S2/S3 records under a co
 | V3 ensemble r3 + r4, K=200 | 0.9776 | 0.990 | 0.949 | 0.970 |
 | V3 ensemble + twin-contrast / name-ambiguity stage-2 features (r4ensX), K=100 | 0.9760 | 0.989 | 0.945 | 0.971 |
 | V3 r4ensX, K=200 | 0.9779 | 0.990 | 0.950 | 0.971 |
-| **Final ([FINAL_RUN])** | **[FINAL_VAL_F05]** | [P] | [R] | [S] |
+| **Final: r4ensX, K=200** | **0.9779** | **0.990** | **0.950** | **0.971** |
 
-- **Public leaderboard:** [FINAL_LB] for the final submission (earlier: 0.889 for [LB_0889_RUN]).
+- **Public leaderboard:** V3_r1 (validation 0.9634) scored 0.889, well below its validation score; section 5.1 analyses this gap.
 
-- **F_0.5 Score (macro):** **[FINAL_VAL_F05]** on the full frozen validation split (441,365 S1). The ceiling at K=200 is 0.9921.
+- **F_0.5 Score (macro):** **0.9779** on the full frozen validation split (441,365 S1). The ceiling at K=200 is 0.9921.
 - **Common false positives (wrong merges):**
   - distractor twins at the same address that differ only by a small typo or a dropped legal suffix (`Ollanelle Micro` vs `Olanelle Micro LLC`);
   - name-only records (empty address) with an exact name that belong to a same-named S1 elsewhere.
@@ -153,12 +153,12 @@ We retrieve, for every Source-1 entity, its 200 nearest S2/S3 records under a co
   | [stage 1 + stage 2 trained under the shift] | [SHIFT_B] |
 
   Shifting only the stage-2 context barely moves the score; the stage-1 competition features carry the effect, which is why the full simulation rescores stage 1 with shifted statistics.
-- **Test-time calibration.** From one stage-2 pass we also write variants with per-country logit shifts of the stage-2 probability before the tuned rule (`variants`). On validation, V3_r1's F0.5 by shift: +0.5 0.9611, 0 0.9626, −0.5 0.9623, −1.0 0.9609, −1.5 0.9581, −2.0 0.9534, −3.0 0.9388. Mild conservative shifts cost almost nothing on validation and protect precision on the denser test distribution. [FINAL_SHIFT_CHOICE]
+- **Test-time calibration.** From one stage-2 pass we also write variants with per-country logit shifts of the stage-2 probability before the tuned rule (`variants`). On validation, V3_r1's F0.5 by shift: +0.5 0.9611, 0 0.9626, −0.5 0.9623, −1.0 0.9609, −1.5 0.9581, −2.0 0.9534, −3.0 0.9388. Mild conservative shifts cost almost nothing on validation and protect precision on the denser test distribution. The final submission applies the validation-tuned rule without a shift.
 
 ---
 
 ## 6. Conclusion
-Most of the gain came from modelling how the data was generated, not from model capacity: legal-form and extra-word features, sibling consensus, and one-owner assignment together lifted validation F0.5 from 0.855 to **[FINAL_VAL_F05]**. The remaining gap to the 0.992 ceiling is dominated by records that carry too little information to be matched confidently (empty address, same-named entities).
+Most of the gain came from modelling how the data was generated, not from model capacity: legal-form and extra-word features, sibling consensus, and one-owner assignment together lifted validation F0.5 from 0.855 to **0.9779**. The remaining gap to the 0.992 ceiling is dominated by records that carry too little information to be matched confidently (empty address, same-named entities).
 
 ---
 
