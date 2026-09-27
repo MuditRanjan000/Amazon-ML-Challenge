@@ -198,3 +198,8 @@
   - cluster-level assignment of S2/S3 records before S1 assignment (about 0.012);
   - empty-address/name-ambiguity resolution (about 0.012 on val; simple rescue rules measured +0.0001);
   - extra retrieval channels (about 0.008).
+- **[23:36 IST] Final LB:** V3_ens8090_m05 (stage 2 refit under the 80/90% orphan simulation, averaged, −0.5 shift) scored **0.964**, below ens3shift's **0.965**, so the final package is ens3shift (0.965).
+  - Lesson: the 90% simulation was calibrated on a single LB point, and the gain it predicted (+0.009) did not transfer.
+  - The only LB-validated improvements were:
+    - stage-1 look-alike features (legal form, extra tokens, token rarity): 0.889 → 0.959;
+    - stage-1 retraining under the 20% orphan simulation: 0.959 → 0.965.
