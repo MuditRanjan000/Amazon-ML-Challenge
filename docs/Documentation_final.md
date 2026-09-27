@@ -109,8 +109,13 @@ We retrieve, for every Source-1 entity, its 200 nearest S2/S3 records under a co
 |---|---|---|---|---|
 | Rule baseline (RULE-001) | 0.7505 | 0.802 | 0.679 | 0.169 |
 | Logistic regression, 43 features (LR-43) | 0.8554 | 0.905 | 0.771 | 0.771 |
-| V3 round 1 (36 features, K=100) | 0.9634 | 0.980 | 0.925 | 0.932 |
+| V3 round 1 (36 features, 100k S1, K=100) | 0.9634 | 0.980 | 0.925 | 0.932 |
+| V3 r3 (49 features, 200k S1, K=100) | 0.9732 | | | |
+| V3 r3, K=200 | 0.9751 | | | |
+| V3 ensemble r3 + r4 (stage 1 averaged), K=200 | 0.9776 | | | |
 | **Final ([FINAL_RUN])** | **[FINAL_VAL_F05]** | [P] | [R] | [S] |
+
+- **Public leaderboard:** [FINAL_LB] for the final submission (earlier: 0.889 for [LB_0889_RUN]).
 
 - **F_0.5 Score (macro):** **[FINAL_VAL_F05]** on the full frozen validation split (441,365 S1). The ceiling at K=200 is 0.9921.
 - **Common false positives (wrong merges):**
@@ -122,6 +127,31 @@ We retrieve, for every Source-1 entity, its 200 nearest S2/S3 records under a co
   - gibberish-name copies with a partial address;
   - pairs outside the top-200 candidates (the blocking ceiling).
 
+### 5.1 Test distribution shift and the orphan simulation
+- **The shift.** Test has more S2/S3 records per S1 than train, uniformly across countries (no labels needed to see it):
+
+  | Split | Country | S1 | S2+S3 | Records per S1 |
+  |---|---|---|---|---|
+  | train | US | 1,323,633 | 6,186,873 | 4.67 |
+  | train | India | 883,188 | 4,133,346 | 4.68 |
+  | test | US | 663,106 | 3,817,031 | 5.76 |
+  | test | India | 809,986 | 4,717,565 | 5.82 |
+  | test | France | 259,452 | 1,434,993 | 5.53 |
+
+  If test S1 have as many true matches as train S1 (~3.46), about 40% of test records are distractors, against 26% in train.
+- **Why it matters for this matcher.** Our strongest signals are competitive: a distractor twin loses its record because the twin's own S1 is in the reference set and claims it (record competition in stage 1, one owner per record in the decision). A twin whose S1 is *absent* is an "orphan": nothing claims its records, so a similar S1 can win them. Validation cannot show this, because validation S1 compete with the complete train S1 set.
+- **The simulation.** We treat a fixed 20% of train+val S1 (seed 11, `output/v3/dropped_s1.txt`, 441,364 S1) as absent, which turns their records into owner-less distractors and brings records per S1 to ~5.8, as in test. Blocking needs no change (retrieval is per S1, so the remaining S1 keep their exact candidates). We recompute the record competition statistics without them (`candidate_record_stats.py --drop-s1`), train stage 1 on the remaining S1 (`train --exclude-s1`), and fit/tune stage 2 on the remaining train S1 and evaluate on the remaining 352,903 val S1 (`decide --drop-s1`).
+- **Results.**
+
+  | Check | Val F0.5 |
+  |---|---|
+  | V3_r1 unchanged (stage-1 stats unshifted, stage-2 context shifted) | 0.9626 (vs 0.9634) |
+  | [r3 K=200 stage 2 on the fully shifted val] | [SHIFT_A] |
+  | [stage 1 + stage 2 trained under the shift] | [SHIFT_B] |
+
+  Shifting only the stage-2 context barely moves the score; the stage-1 competition features carry the effect, which is why the full simulation rescores stage 1 with shifted statistics.
+- **Test-time calibration.** From one stage-2 pass we also write variants with per-country logit shifts of the stage-2 probability before the tuned rule (`variants`). On validation, V3_r1's F0.5 by shift: +0.5 0.9611, 0 0.9626, −0.5 0.9623, −1.0 0.9609, −1.5 0.9581, −2.0 0.9534, −3.0 0.9388. Mild conservative shifts cost almost nothing on validation and protect precision on the denser test distribution. [FINAL_SHIFT_CHOICE]
+
 ---
 
 ## 6. Conclusion
@@ -132,7 +162,7 @@ Most of the gain came from modelling how the data was generated, not from model 
 ## Appendix
 
 ### A. Code Artefacts
-`code/business_entity_resolution/` (see its `README.md`):
+`code/business_entity_resolution/` (its `README.md` = `docs/submission_README.md`: package layout, environment and every command in order):
 - `src/entity_resolution/`:
   - `blocking/tfidf_blocking.py`: the blocker;
   - `v3_match.py`: normalization and pair features;
