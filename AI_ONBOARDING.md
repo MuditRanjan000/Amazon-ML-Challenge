@@ -182,3 +182,19 @@
     - dropped set `output/v3/dropped_s1.txt` (20% of train+val S1, seed 11).
 - **AWS:** shared team account (PAID, credits-only rule), bucket `amazon-ml-2026-team-655285961749`; runs v3run, v3run2, v3run3, v3run6 there. Every box self-terminates.
 - **Coordination:** several Claude sessions worked on this branch at once, coordinated via SendMessage. Always pull before editing `execution/v3_pipeline.py`.
+
+## [2026-09-27 23:15 IST] Final submissions (v3)
+- **LB history (public):**
+  - 0.889 V3_r1;
+  - 0.952 r4ens with per-country cap (FR 3 / US+IN 5), cap rejected by the LB;
+  - 0.959 r4ensX uncapped;
+  - 0.965 ens3shift (orphan-trained);
+  - final probe ens3shift50 (stage 2 refit under a 50% orphan simulation, 50%-sim val 0.97577), LB pending.
+- **Pattern from LB deltas:** removed pairs were about 93% false (V3_r1→r4ensX), then about 65% false (→ens3shift). Test's extra errors are look-alike (orphan) businesses with a nearby house number or one swapped word and no S1 of their own. Val underestimates them; the orphan simulation (`--drop-s1`) is the proxy.
+- **Tools:**
+  - `execution/v3_eval_rules.py`: shift / targeted-drop rules on shifted val;
+  - `variants`: shifts and caps.
+- **What 0.99+ would need** (not done):
+  - cluster-level assignment of S2/S3 records before S1 assignment (about 0.012);
+  - empty-address/name-ambiguity resolution (about 0.012 on val; simple rescue rules measured +0.0001);
+  - extra retrieval channels (about 0.008).
