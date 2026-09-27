@@ -42,6 +42,8 @@ scripts/aws/launch_fanout.sh status --bucket $B --split test   # progress / outp
   - vCPU quota needed ≈ 2 × on-demand workers (on-demand quota) and 2 × spot workers (spot quota).
   - Any type with ≥ 8 GB RAM works (a worker needs ~7 GB + 8 GB swap).
   - Free-plan accounts can launch only free-tier-eligible types (`m7i-flex.large` is the best).
+  - Shared team account (655285961749, 32 on-demand + 32 spot vCPU): `--workers 32 --spot-from 17`.
+  - The merge uploads the candidate files (+ `status/candidates.DONE`) **before** it computes the record stats, so a stats failure never holds back the candidates.
 - **Measured, 48 × m7i-flex.large in ap-south-1:**
   - Test: 22 min wall, ≈ $0.81.
   - Train+val: ~25 min, ≈ $1.5.

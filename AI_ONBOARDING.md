@@ -145,3 +145,18 @@
 - The region is now a user-data placeholder (`__REGION__`).
 - `docs/aws_blocking_runbook.md` is rewritten for the frozen blocker, with expected byte-identical hashes as the reproducibility check.
 - Verified: dry-run of setup and run (3 workers, spot split), rendered user-data has every placeholder filled, `bash -n` passes, 31 tests pass. **Not yet executed on AWS**; the first real run is Mudit's backup account.
+
+## [2026-09-27 17:50 IST] Test candidates regenerated on the shared team account (Aayush)
+- **Account:** shared team AWS account 655285961749 (PAID plan, credits only; hard rule: never let credits run out). Bucket `amazon-ml-2026-team-655285961749` (public access blocked).
+- **Run:** `launch_fanout.sh run --split test --workers 32 --spot-from 17` from commit `90b0553`: 16 on-demand + 16 spot m7i-flex.large, all 32 parts DONE first try; 28 min wall end-to-end; ~$1 of credits. 0 instances / 0 volumes left.
+- **Result, byte-identical to the lost original:**
+  - `test_candidate_pairs.tsv` sha256 `6e11c1ec60a8f73f47b214211002928f66eac08f19c60a3be73bc682bced5925`;
+  - 1,732,544 S1 (US 663,106 / India 809,986 / France 259,452), 200 candidates each, 0 empty;
+  - 346,508,800 pairs, config_sha `657f59868e58`.
+  - `record_stats_test.parquet` sha256 `f07017fc…` (first AWS run of the stats step).
+- **Where:** `s3://amazon-ml-2026-team-655285961749/run-90b0553-test/final/` (TSV + .gz + stats + metadata + SHA256SUMS); per-slice parts in `…/parts/` (useful as scoring shards).
+- **Change:** the merge now uploads the candidates (`status/candidates.DONE`) before it computes record stats, so a stats failure can't block delivery.
+- **Matcher probe (scratch, not a registered result):**
+  - Setup: HistGB on 23 vectorized RapidFuzz/number/competition features; trained on 20k train S1 at K=100.
+  - Result: ~0.919 macro F0.5 on 20k val S1 (own evaluator, val-only competitors), vs LR-43's 0.855 on full val.
+  - Error analysis: the generator perturbs house numbers inside true matches too (4507→380, 1320→1318), and some distractors are near-identical copies of real entities ("Ollanelle Micro" at the same address). Exact number agreement is therefore not decisive.
