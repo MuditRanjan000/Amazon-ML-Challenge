@@ -66,7 +66,20 @@ def stream_pairs(path, K, s1_keep=None, row_range=None):
 
 def load_norm(split, ids):
     t = pq.read_table(V3 / f"norm_{split}.parquet", filters=[("entity_id", "in", list(ids))])
-    return t.to_pandas().set_index("entity_id")
+    norm = t.to_pandas().set_index("entity_id")
+    tok = V3 / f"tokdf_{split}.parquet"
+    if tok.exists():  # name-token rarity: generated gibberish names are unique tokens, real words are shared
+        norm = norm.join(pq.read_table(tok, filters=[("entity_id", "in", list(ids))]).to_pandas().set_index("entity_id"))
+    return norm
+
+
+def token_rarity(nn: pd.Series) -> pd.DataFrame:
+    """Per entity: log document frequency (over all names of the split) of its rarest name token, and the mean."""
+    toks = nn.str.split().explode()
+    df = toks.map(toks.value_counts()).astype("float64")
+    ldf = np.log1p(df)
+    g = ldf.groupby(level=0)
+    return pd.DataFrame({"tok_min_ldf": g.min().fillna(-1), "tok_mean_ldf": g.mean().fillna(-1)}).astype("float32")
 
 
 def load_stats(path, ids):
@@ -128,6 +141,10 @@ def cmd_normalize(a):
         del df
         logging.info("source %d done (%d so far, %.0fs)", s, n, time.time() - t0)
     writer.close()
+    nn = pd.read_parquet(V3 / f"norm_{a.split}.parquet", columns=["entity_id", "nn"])
+    tr = token_rarity(nn["nn"])
+    tr.insert(0, "entity_id", nn["entity_id"].to_numpy())
+    tr.to_parquet(V3 / f"tokdf_{a.split}.parquet", index=False)
     logging.info("normalized %d %s entities in %.0fs", n, a.split, time.time() - t0)
 
 
@@ -139,15 +156,21 @@ def cmd_train(a):
     sample = set(rng.choice(sorted(train_ids), a.n_s1, replace=False))
     pairs = stream_pairs(a.train_cands, a.K, s1_keep=sample)
     logging.info("train pairs %d (%d S1) in %.0fs", len(pairs), pairs["s1"].nunique(), time.time() - t0)
-    ids = set(pairs["s1"]) | set(pairs["cand"])
-    X = featurize(pairs, load_norm("train", ids), load_stats(a.stats, set(pairs["cand"])))
     tk = truth_keys(gt[gt["source1_entity_id"].isin(sample)])
     y = np.fromiter((k in tk for k in zip(pairs["s1"], pairs["cand"])), bool, len(pairs))
+    w = np.ones(len(pairs), np.float32)
+    if a.deep_neg_keep < 1:  # ranks > 100 are almost all negatives: subsample them, reweight to keep calibration
+        deep = (pairs["rank"].to_numpy() > 100) & ~y
+        drop = deep & (rng.random(len(pairs)) >= a.deep_neg_keep)
+        w[deep] = 1 / a.deep_neg_keep
+        pairs, y, w = pairs[~drop].reset_index(drop=True), y[~drop], w[~drop]
+    ids = set(pairs["s1"]) | set(pairs["cand"])
+    X = featurize(pairs, load_norm("train", ids), load_stats(a.stats, set(pairs["cand"])))
     logging.info("features %s pos %.4f in %.0fs", X.shape, y.mean(), time.time() - t0)
     m = HistGradientBoostingClassifier(max_iter=a.iters, learning_rate=0.08, max_leaf_nodes=127,
                                        min_samples_leaf=200, l2_regularization=1.0, random_state=42,
                                        early_stopping=False)
-    m.fit(X, y)
+    m.fit(X, y, sample_weight=w)
     V3.mkdir(parents=True, exist_ok=True)
     joblib.dump({"model": m, "features": list(X.columns), "K": a.K, "n_s1": a.n_s1, "sample": sorted(sample)},
                 V3 / f"m1{a.tag}.joblib")
@@ -259,10 +282,11 @@ def norm_keys(split, ids):
     return t.to_pandas().set_index("entity_id")
 
 
-def read_scored(d, name):
+def read_scored(d, name, K=None):
     parts = sorted(Path(d).glob(f"{name}.part*.parquet"))
     assert parts, f"no {name} parts in {d}"
-    return pd.concat([pd.read_parquet(p) for p in parts], ignore_index=True)
+    df = pd.concat([pd.read_parquet(p) for p in parts], ignore_index=True)
+    return df if K is None else df[df["rank"] <= K].reset_index(drop=True)
 
 
 def decisions(df, prob, t):
@@ -354,7 +378,7 @@ def cmd_decide(a):
     gt = DataLoader().load_ground_truth()
     train_ids, val_ids = create_validation_split(gt)
     m1_sample = set(joblib.load(a.m1)["sample"])
-    tv = context(pd.concat([read_scored(a.scored, "train"), read_scored(a.scored, "val")], ignore_index=True))
+    tv = context(pd.concat([read_scored(a.scored, "train", a.K), read_scored(a.scored, "val", a.K)], ignore_index=True))
     tv = siblings(tv, norm_keys("train", set(tv["s1"]) | set(tv["cand"])))
     logging.info("trainval scored pairs %d in %.0fs", len(tv), time.time() - t0)
     tk = truth_keys(gt)
@@ -363,7 +387,7 @@ def cmd_decide(a):
     fit_s1 = np.array(sorted(set(tv.loc[~is_val, "s1"]) - m1_sample))
     fit_s1 = set(np.random.default_rng(7).choice(fit_s1, min(a.s2_n, len(fit_s1)), replace=False))
     fit = tv["s1"].isin(fit_s1).to_numpy()
-    m2 = HistGradientBoostingClassifier(max_iter=300, learning_rate=0.08, max_leaf_nodes=63, min_samples_leaf=200,
+    m2 = HistGradientBoostingClassifier(max_iter=a.s2_iters, learning_rate=0.08, max_leaf_nodes=63, min_samples_leaf=200,
                                         random_state=42, early_stopping=False)
     feats = S2_FEATURES + [c for c in KEEP_FEATURES if c in tv.columns]
     m2.fit(tv.loc[fit, feats], tv.loc[fit, "y"])
@@ -411,7 +435,7 @@ def check_candidate_file(path, s1_ids, matches):
 
 
 def apply_test(a, m2, feats, best, t0):
-    te = context(read_scored(a.scored, "test"))
+    te = context(read_scored(a.scored, "test", a.K))
     te = siblings(te, norm_keys("test", set(te["s1"]) | set(te["cand"])))
     te["p2"] = m2.predict_proba(te[feats])[:, 1].astype(np.float32)
     tp = te[select(te, best)]
@@ -445,6 +469,7 @@ def main():
     s.add_argument("--K", type=int, default=100)
     s.add_argument("--iters", type=int, default=400)
     s.add_argument("--tag", default="", help="model file suffix: output/v3/m1<tag>.joblib")
+    s.add_argument("--deep-neg-keep", type=float, default=1.0, help="keep this share of rank>100 negatives")
     s = sub.add_parser("score")
     s.add_argument("--cands", required=True)
     s.add_argument("--split", required=True, choices=["train", "test"], help="which normalized table")
@@ -462,6 +487,7 @@ def main():
     s.add_argument("--K", type=int, default=100)
     s.add_argument("--s2-n", type=int, default=400_000, help="train S1 (not in the m1 sample) for stage 2")
     s.add_argument("--m1", default=str(V3 / "m1.joblib"), help="the stage-1 model the scored parts came from")
+    s.add_argument("--s2-iters", type=int, default=300)
     s.add_argument("--reuse", action="store_true", help="skip val tuning; apply the saved m2<tag> + rule to test")
     s.add_argument("--tag", default="")
     s.add_argument("--out", default=str(config.OUTPUT_DIR / "submissions" / "V3"))

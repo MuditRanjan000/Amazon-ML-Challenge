@@ -163,6 +163,9 @@ def pair_features(ia, ib, A: pd.DataFrame, B: pd.DataFrame, score, rank, s1_top,
     f["n1_in_b"] = np.fromiter((x != "" and x in y.split() for x, y in zip(a1, nb_)), np.float32, len(a1))
     f["a_nonlatin"] = A["nonlatin"].to_numpy()[ia]
     f["b_nonlatin"] = B["nonlatin"].to_numpy()[ib]
+    if "tok_min_ldf" in B.columns:
+        for c in ("tok_min_ldf", "tok_mean_ldf"):
+            f["a_" + c], f["b_" + c] = A[c].to_numpy()[ia], B[c].to_numpy()[ib]
     # legal form: distractor twins often swap it (LLC -> Co, Private -> Public); true copies keep or drop it
     if "lg" in A.columns:
         la_, lb_ = A["lg"].to_numpy()[ia], B["lg"].to_numpy()[ib]
