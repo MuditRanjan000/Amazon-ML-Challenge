@@ -110,9 +110,12 @@ We retrieve, for every Source-1 entity, its 200 nearest S2/S3 records under a co
 | Rule baseline (RULE-001) | 0.7505 | 0.802 | 0.679 | 0.169 |
 | Logistic regression, 43 features (LR-43) | 0.8554 | 0.905 | 0.771 | 0.771 |
 | V3 round 1 (36 features, 100k S1, K=100) | 0.9634 | 0.980 | 0.925 | 0.932 |
-| V3 r3 (49 features, 200k S1, K=100) | 0.9732 | | | |
-| V3 r3, K=200 | 0.9751 | | | |
-| V3 ensemble r3 + r4 (stage 1 averaged), K=200 | 0.9776 | | | |
+| V3 r3 (49 features, 200k S1, K=100) | 0.9732 | 0.987 | 0.941 | 0.962 |
+| V3 r3, K=200 | 0.9751 | 0.988 | 0.946 | 0.962 |
+| V3 ensemble r3 + r4 (stage 1 averaged), K=100 | 0.9757 | 0.989 | 0.945 | 0.970 |
+| V3 ensemble r3 + r4, K=200 | 0.9776 | 0.990 | 0.949 | 0.970 |
+| V3 ensemble + twin-contrast / name-ambiguity stage-2 features (r4ensX), K=100 | 0.9760 | 0.989 | 0.945 | 0.971 |
+| V3 r4ensX, K=200 | 0.9779 | 0.990 | 0.950 | 0.971 |
 | **Final ([FINAL_RUN])** | **[FINAL_VAL_F05]** | [P] | [R] | [S] |
 
 - **Public leaderboard:** [FINAL_LB] for the final submission (earlier: 0.889 for [LB_0889_RUN]).
