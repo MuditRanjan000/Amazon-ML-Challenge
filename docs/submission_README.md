@@ -1,7 +1,7 @@
 # Business Entity Resolution — reproduction guide
 
 > This file becomes `code/business_entity_resolution/README.md` in the submission zip.
-> Final run: **ensemble r3 + r4, K=200, per-S1 cap 5 (France 3)** (validation F0.5 0.9776 before the cap; leaderboard [LB_CAP]). Code snapshot: commit `c62a969`. Provenance: stage-1 models trained at `c0149fb` (r3) and `2b824df` (r4), test scored at `780ad8c`, decide run from the `v3run3` code snapshot, cap applied by `variants` at `d2db812`; later commits only add options (seeds, ensembles, orphan simulation) and leave these steps unchanged.
+> Final run: **r4ensX, K=200** (validation F0.5 0.9779, public leaderboard 0.959). Code snapshot: commit `c62a969`. Provenance: stage-1 models trained at `c0149fb` (r3) and `2b824df` (r4), test scored at `780ad8c`, decide run at `52e05ce`; later commits only add options (seeds, ensembles, orphan simulation) and leave these steps unchanged.
 > The trained models are included in `models/` (`SHA256SUMS` there), so steps 5–6 reproduce the output without retraining. Each model file stores its feature list; retraining at this snapshot reproduces the method, not bit-identical models.
 
 ## 1. Submission package (official README, "Final Submission Package")
@@ -97,29 +97,29 @@ Only pairs with stage-1 `p >= 0.01` are kept for stage 2 and the decision rule (
 
 ### 6. Decide: stage-2 context model + decision rule tuned on the frozen validation split, then applied to test
 ```bash
-python execution/v3_pipeline.py decide --scored output/v3/scored --m1 $M --K 200 --tag _r4ensk200 \
+python execution/v3_pipeline.py decide --scored output/v3/scored --m1 $M --K 200 --tag _r4ensXk200 \
   --s2-n 1500000 --s2-iters 400 \
-  --test-cands artifacts/blocking/test_candidate_pairs.tsv.gz --out output/submissions/V3_r4ens_k200
+  --test-cands artifacts/blocking/test_candidate_pairs.tsv.gz --out output/submissions/V3_r4ensX_k200
 ```
 Stage 2 is fit on train S1 outside the stage-1 samples; the rule (probability threshold or per-S1 expected-F0.5 selection, with or without one owner per record) is grid-searched on validation and confirmed with the official evaluator. Writes `matching_results.tsv` and `candidate_pairs.tsv` (all rank ≤ K pairs = the scored set) and validates them.
 
-### 7. Test-time variants: per-country match cap (final) and logit shifts of the stage-2 probability
+### 7. (optional) Test-time variants: per-country logit shifts of the stage-2 probability
 ```bash
-python execution/v3_pipeline.py variants --scored output/v3/scored --m2 output/v3/m2_r4ensk200.joblib --K 200 \
-  --out output/submissions/variants --variants '{"cap53": {"shift": 0, "cap": {"US": 5, "India": 5, "France": 3}}}'   # final: output/submissions/variants/cap53/matching_results.tsv
+python execution/v3_pipeline.py variants --scored output/v3/scored --m2 output/v3/m2_r4ensXk200.joblib --K 200 \
+  --out output/submissions/variants --variants '{"base": 0, "c1": {"*": -1.0, "France": -1.5}}'
 ```
 Shift-robustness check on the shifted validation (section 5 of the documentation):
 ```bash
 python execution/v3_pipeline.py decide --scored output/v3/scored --m1 $M --K 200 --drop-s1 output/v3/dropped_s1.txt \
-  --eval-m2 output/v3/m2_r4ensk200.joblib --tag _shifteval
+  --eval-m2 output/v3/m2_r4ensXk200.joblib --tag _shifteval
 ```
 
 ### 8. Validate
 ```bash
-python scripts/validate_submission.py --submission output/submissions/variants/cap53/matching_results.tsv \
-  --candidate output/submissions/V3_r4ens_k200/candidate_pairs.tsv --check-ids   # official validator (needs > 16 GB at K=200)
+python scripts/validate_submission.py --submission output/submissions/V3_r4ensX_k200/matching_results.tsv \
+  --candidate output/submissions/V3_r4ensX_k200/candidate_pairs.tsv --check-ids   # official validator (needs > 16 GB at K=200)
 ```
-Expected sha256: `matching_results.tsv` `653ac79d418b576121456cf758c7af3e18ed6479f99656d615207fd11eb05113` (after the cap), `candidate_pairs.tsv` `6e8e7a19baea8cd1663fab8c688211cd5460f097f297a79c190ce7322f6236c2`.
+Expected sha256: `matching_results.tsv` `ea3484051f48bb1b3487191a74e9450408339eab61138c6d0b01f3254561fe39`, `candidate_pairs.tsv` `6e8e7a19baea8cd1663fab8c688211cd5460f097f297a79c190ce7322f6236c2`.
 
 ## 4. The same steps on AWS (what we actually ran)
 

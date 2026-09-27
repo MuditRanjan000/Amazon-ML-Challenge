@@ -11,8 +11,7 @@ We retrieve, for every Source-1 entity, its 200 nearest S2/S3 records under a co
 - **Stage 1** scores each pair on fuzzy name, address, number, legal-form and name-rarity features.
 - **Stage 2** re-scores each pair using its context: how the record's other S1 compete for it, and whether the S1's other candidates agree with it ("sibling consensus").
 - **Decisions** enforce the many-to-one structure: each record goes to at most one S1. Each S1 then keeps the candidates that maximize expected F0.5.
-- **Final rule:** after the val-tuned decisions, each S1 keeps at most its 5 most probable matches (3 in France), a cap chosen on the leaderboard for the denser test distribution (section 5.1).
-- **Score:** frozen validation F0.5 **0.9776** before the cap (official evaluator; logistic-regression baseline 0.855); public leaderboard **[LB_CAP]** with the cap.
+- **Score:** frozen validation F0.5 **0.9779** (official evaluator; logistic-regression baseline 0.855); public leaderboard **0.959**.
 
 ---
 
@@ -101,7 +100,6 @@ We retrieve, for every Source-1 entity, its 200 nearest S2/S3 records under a co
 - Rules were grid-searched on the full frozen validation split with the official macro-F0.5 formula. The winner was confirmed with the official evaluator.
 - Candidate rules: a probability threshold, or per-S1 expected-F0.5 selection with a bias term, each with or without one-owner assignment.
 - Validation S1 compete with train S1 for the same records, exactly as all test S1 do.
-- **Final test-time cap:** per S1, only the highest-probability matches are kept, at most 5 (US, India) or 3 (France, unseen in training). Validation cannot tune this, because the test distribution differs from it (section 5.1); the leaderboard lifted from 0.889 (uncapped V3_r1) to [LB_CAP].
 
 ---
 
@@ -118,11 +116,19 @@ We retrieve, for every Source-1 entity, its 200 nearest S2/S3 records under a co
 | V3 ensemble r3 + r4, K=200 | 0.9776 | 0.990 | 0.949 | 0.970 |
 | V3 ensemble + twin-contrast / name-ambiguity stage-2 features (r4ensX), K=100 | 0.9760 | 0.989 | 0.945 | 0.971 |
 | V3 r4ensX, K=200 | 0.9779 | 0.990 | 0.950 | 0.971 |
-| **Final: ensemble r3 + r4, K=200, + per-S1 cap 5 / France 3** | 0.9776 before the cap | | | |
+| **Final: r4ensX, K=200** | **0.9779** | **0.990** | **0.950** | **0.971** |
 
-- **Public leaderboard:** V3_r1 (validation 0.9634) scored 0.889, well below its validation score; section 5.1 analyses this gap. The final capped ensemble scored **[LB_CAP]**.
+- **Public leaderboard history:**
 
-- **F_0.5 Score (macro):** **0.9779** best (r4ensX), 0.9776 for the final ensemble before the cap, on the full frozen validation split (441,365 S1). The ceiling at K=200 is 0.9921.
+  | Submission | Val F0.5 | Public LB |
+  |---|---|---|
+  | V3_r1 (K=100) | 0.9634 | 0.889 |
+  | Ensemble r3 + r4, K=200, per-S1 cap 5 (France 3) | 0.9776 before the cap | 0.952 |
+  | **r4ensX, K=200, uncapped (final)** | **0.9779** | **0.959** |
+
+  The val→LB gap shrank from 0.074 (V3_r1) to 0.019 (r4ensX): the stronger stage 1, the ensemble and the twin-contrast / name-ambiguity features transfer to test. A hard per-S1 cap on the number of matches was **rejected by the leaderboard** (0.952 < 0.959): the extra test predictions are not simply the lowest-ranked ones, and the cap removes true matches of S1 with many copies. Section 5.1 analyses the remaining gap.
+
+- **F_0.5 Score (macro):** **0.9779** on the full frozen validation split (441,365 S1). The ceiling at K=200 is 0.9921.
 - **Common false positives (wrong merges):**
   - distractor twins at the same address that differ only by a small typo or a dropped legal suffix (`Ollanelle Micro` vs `Olanelle Micro LLC`);
   - name-only records (empty address) with an exact name that belong to a same-named S1 elsewhere.
@@ -155,7 +161,7 @@ We retrieve, for every Source-1 entity, its 200 nearest S2/S3 records under a co
   | [stage 1 + stage 2 trained under the shift] | [SHIFT_B] |
 
   Shifting only the stage-2 context barely moves the score; the stage-1 competition features carry the effect, which is why the full simulation rescores stage 1 with shifted statistics.
-- **Test-time calibration.** From one stage-2 pass we also write variants with per-country logit shifts of the stage-2 probability before the tuned rule (`variants`). On validation, V3_r1's F0.5 by shift: +0.5 0.9611, 0 0.9626, −0.5 0.9623, −1.0 0.9609, −1.5 0.9581, −2.0 0.9534, −3.0 0.9388. Mild conservative shifts cost almost nothing on validation and protect precision on the denser test distribution. The final submission applies no shift; instead it caps matches per S1 (5; France 3), which the leaderboard rewarded far more.
+- **Test-time calibration.** From one stage-2 pass we also write variants with per-country logit shifts of the stage-2 probability before the tuned rule (`variants`). On validation, V3_r1's F0.5 by shift: +0.5 0.9611, 0 0.9626, −0.5 0.9623, −1.0 0.9609, −1.5 0.9581, −2.0 0.9534, −3.0 0.9388. Mild conservative shifts cost almost nothing on validation and protect precision on the denser test distribution. The final submission applies the validation-tuned rule without a shift or a cap.
 
 ---
 
