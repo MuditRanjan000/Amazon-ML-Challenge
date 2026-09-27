@@ -49,6 +49,16 @@ if [ "$MODE" = part ]; then
 else
   aws s3 cp $S3/parts/ artifacts/blocking/parts/ --recursive --only-show-errors
   .venv/bin/python scripts/aws/run_d2_blocking.py --merge "$N" --exp-id "$EXP"
+  # candidates first, so a failure in the (optional) stats step can't hold them back
+  dnf install -y -q pigz
+  cd artifacts/blocking
+  for f in *_candidate_pairs.tsv; do [ "$f" = train_sample_candidate_pairs.tsv ] || pigz -k -1 "$f"; done
+  sha256sum *_candidate_pairs.tsv > SHA256SUMS
+  for f in *_candidate_pairs.tsv *_candidate_pairs.tsv.gz SHA256SUMS train_sample_s1_ids.csv blocking_metadata.json; do
+    if [ -f "$f" ]; then aws s3 cp "$f" $S3/final/$f --only-show-errors; fi
+  done
+  echo "candidates uploaded $(date -u +%FT%TZ)" | aws s3 cp - $S3/status/candidates.DONE --only-show-errors
+  cd /opt/repo
   # per-record competition stats over ALL S1 of the merged split (train+val together, or all test)
   aws s3 cp s3://$BUCKET/data/${DATA}_parquet.tar - | tar -x -C /opt
   if [ "$SPLIT" = test ]; then
@@ -59,14 +69,8 @@ else
         --inputs artifacts/blocking/train_candidate_pairs.tsv artifacts/blocking/validation_candidate_pairs.tsv \
         --out artifacts/blocking/record_stats_trainval.parquet
   fi
-  dnf install -y -q pigz
-  cd artifacts/blocking
-  for f in *_candidate_pairs.tsv; do [ "$f" = train_sample_candidate_pairs.tsv ] || pigz -k -1 "$f"; done
-  sha256sum *_candidate_pairs.tsv record_stats_*.parquet > SHA256SUMS
-  for f in *_candidate_pairs.tsv *_candidate_pairs.tsv.gz record_stats_*.parquet SHA256SUMS train_sample_s1_ids.csv blocking_metadata.json; do
-    if [ -f "$f" ]; then aws s3 cp "$f" $S3/final/$f --only-show-errors; fi
-  done
-  cd /opt/repo
+  (cd artifacts/blocking && sha256sum record_stats_*.parquet >> SHA256SUMS && for f in record_stats_*.parquet SHA256SUMS; do
+     aws s3 cp "$f" $S3/final/$f --only-show-errors; done)
   aws s3 cp experiments/results/experiments.jsonl $S3/final/experiments.jsonl --only-show-errors
 fi
 finish DONE
