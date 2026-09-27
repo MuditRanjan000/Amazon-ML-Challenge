@@ -526,11 +526,11 @@ def cmd_variants(a):
     Test has ~23% more records per S1 than train (denser distractor twins), so val-tuned decisions are optimistic;
     the leaderboard calibrates the shift. --variants '{"base": 0, "cons1": {"US": -0.3, "India": -0.6, "France": -0.9}}'"""
     t0 = time.time()
-    saved = joblib.load(a.m2)
-    m2, feats, best = saved["m2"], saved["features"], saved["best"]
+    saved = [joblib.load(m) for m in a.m2.split(",")]  # several stage-2 models -> average p2
+    best = saved[0]["best"]
     te = context(read_scored(a.scored, "test", a.K, a.p_col))
     te = siblings(te, norm_keys("test", set(te["s1"]) | set(te["cand"])))
-    te["p2"] = m2.predict_proba(te[feats])[:, 1]
+    te["p2"] = np.mean([sv["m2"].predict_proba(te[sv["features"]])[:, 1] for sv in saved], axis=0)
     s1 = DataLoader().load_source("test", 1, columns=["entity_id", "country"])
     cty = s1.set_index("entity_id")["country"].reindex(te["s1"]).to_numpy()
     out = Path(a.out)

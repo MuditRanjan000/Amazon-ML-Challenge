@@ -20,14 +20,15 @@ def main():
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     t0 = time.time()
-    sv = joblib.load(a.m2); m2, feats, best = sv["m2"], sv["features"], sv["best"]
+    svs = [joblib.load(m) for m in a.m2.split(",")]  # several stage-2 models -> average p2
+    best = svs[0]["best"]
     gt = DataLoader().load_ground_truth(); _, val_ids = create_validation_split(gt)
     tv = pd.concat([v.read_scored(a.scored, "train", a.K), v.read_scored(a.scored, "val", a.K)], ignore_index=True)
     if a.drop_s1:
         gone = set(open(a.drop_s1, encoding="utf-8").read().split())
         tv = tv[~tv["s1"].isin(gone)].reset_index(drop=True); val_ids = val_ids - gone
     tv = v.siblings(v.context(tv), v.norm_keys("train", set(tv["s1"]) | set(tv["cand"])))
-    tv["p2"] = m2.predict_proba(tv[feats])[:, 1]
+    tv["p2"] = np.mean([sv["m2"].predict_proba(tv[sv["features"]])[:, 1] for sv in svs], axis=0)
     logging.info("p2 ready %.0fs", time.time() - t0)
     val_gt = gt[gt["source1_entity_id"].isin(val_ids)].reset_index(drop=True)
     idx = pd.Index(val_gt["source1_entity_id"]); true = explode_id_lists(val_gt, "matched_entity_ids")
