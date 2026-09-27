@@ -100,7 +100,7 @@ def featurize(pairs, norm, stats, workers=-1):
             ia[sl], ib[sl], norm, norm, pairs["score"].to_numpy()[sl], pairs["rank"].to_numpy()[sl], s1_top[sl],
             pairs["cand"].str.startswith("S3").to_numpy()[sl], st["best_score"].to_numpy()[sl],
             st["second_score"].to_numpy()[sl], st["n_s1"].to_numpy()[sl],
-            (st["best_s1"].to_numpy()[sl] == pairs["s1"].to_numpy()[sl]), workers=workers))
+            (st["best_s1"].fillna("").to_numpy(object)[sl] == pairs["s1"].to_numpy()[sl]), workers=workers))
     return pd.concat(feats, ignore_index=True)
 
 
