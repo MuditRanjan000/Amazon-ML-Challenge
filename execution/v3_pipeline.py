@@ -255,7 +255,8 @@ def context(df):
 
 
 SIB_KEYS = ("n1", "nn", "na", "nums")
-S2_FEATURES += [f"{k}_{x}" for k in SIB_KEYS for x in ("sup", "cnt", "share", "eq_s1")]
+S2_FEATURES += [f"{k}_{x}" for k in SIB_KEYS for x in ("sup", "cnt", "share", "eq_s1", "s1sup")]
+S2_FEATURES += ["s1_name_share", "rec_name_eq_n", "name_eq"]
 
 
 def siblings(df, norm):
@@ -275,7 +276,21 @@ def siblings(df, norm):
         out[f"{k}_sup"] = np.where(empty, -1, sup)
         out[f"{k}_cnt"] = np.where(empty, -1, np.bincount(kk)[kk] - 1)
         out[f"{k}_share"] = np.where(empty, -1, sup / np.maximum(s1_sum - p, 1e-6))
-        out[f"{k}_eq_s1"] = (val == norm[k].reindex(df["s1"]).fillna("").to_numpy()) & ~empty
+        s1val = norm[k].reindex(df["s1"]).fillna("").to_numpy()
+        eq = (val == s1val) & ~empty
+        out[f"{k}_eq_s1"] = eq
+        # twin contrast: p-mass of the S1's OTHER candidates carrying the S1's own value. A twin cluster has its
+        # own support (k_sup) while the S1's value is backed by a different group (k_s1sup)
+        out[f"{k}_s1sup"] = np.bincount(s, weights=p * eq)[s] - p * eq
+    # name ambiguity: 49% of S1 share their normalized name with another S1, so the name alone can't pick the owner
+    s1nn = norm["nn"].reindex(df["s1"]).fillna("").to_numpy()
+    rnn = norm["nn"].reindex(df["cand"]).fillna("").to_numpy()
+    per_s1 = pd.Series(s1nn).groupby(s).first()
+    out["s1_name_share"] = pd.Series(s1nn).map(per_s1.value_counts()).to_numpy()
+    name_eq = (s1nn == rnn) & (rnn != "")
+    c = pd.factorize(df["cand"])[0]
+    out["rec_name_eq_n"] = np.bincount(c, weights=name_eq)[c]
+    out["name_eq"] = name_eq
     return pd.concat([df, pd.DataFrame({k: np.asarray(v, np.float32) for k, v in out.items()}, index=df.index)],
                      axis=1)
 
