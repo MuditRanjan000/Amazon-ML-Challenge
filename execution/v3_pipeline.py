@@ -392,6 +392,27 @@ def write_candidate_lists(cands_path, K, out_path):
     return n_rows
 
 
+def drop_s1(df, dropped):
+    """Shifted val: test has ~5.8 S2+S3 records per S1 in every country vs 4.67 in train, i.e. ~40% owner-less
+    distractors vs 26%. Simulate it by removing the `dropped` S1 (shared file, 20% of train+val) with all their
+    pairs: their records become distractors whose owner is absent, as in test. Forward candidates of the remaining
+    S1 are unchanged; the stage-2 context is recomputed on the rest. On parts scored with unshifted record stats,
+    c_is_best/c_margin are recomputed here for records whose best S1 was dropped (stage-1 p itself still saw the
+    dropped owners, so the shift is understated); parts scored with drop-shifted stats need no fix (lost is empty)."""
+    gone = df["s1"].isin(dropped).to_numpy()
+    lost = set(df.loc[gone & (df["c_is_best"].to_numpy() > 0), "cand"]) if "c_is_best" in df else set()
+    df = df[~gone].reset_index(drop=True)
+    aff = df["cand"].isin(lost).to_numpy()
+    if aff.any():
+        sc = df.loc[aff, "score"]
+        best = sc.groupby(df.loc[aff, "cand"]).transform("max")
+        df.loc[aff, "c_margin"] = (best - sc).astype(df["c_margin"].dtype)
+        df.loc[aff, "c_is_best"] = (sc >= best).astype(df["c_is_best"].dtype)
+    logging.info("drop-s1: removed %d S1 (%d pairs); %d records lost their best S1 (%d pairs recomputed)",
+                 len(dropped), gone.sum(), len(lost), aff.sum())
+    return df
+
+
 def cmd_decide(a):
     t0 = time.time()
     if a.reuse:  # test only, with the stage-2 model + rule already tuned on val
@@ -400,12 +421,27 @@ def cmd_decide(a):
     gt = DataLoader().load_ground_truth()
     train_ids, val_ids = create_validation_split(gt)
     m1_sample = set().union(*(joblib.load(m)["sample"] for m in a.m1.split(",")))  # never fit stage 2 on them
-    tv = context(pd.concat([read_scored(a.scored, "train", a.K), read_scored(a.scored, "val", a.K)], ignore_index=True))
+    tv = pd.concat([read_scored(a.scored, "train", a.K), read_scored(a.scored, "val", a.K)], ignore_index=True)
+    if a.drop_s1:
+        dropped = set(open(a.drop_s1, encoding="utf-8").read().split())
+        tv = drop_s1(tv, dropped)
+        val_ids = set(val_ids) - dropped  # evaluate on the val S1 that are still present
+    tv = context(tv)
     tv = siblings(tv, norm_keys("train", set(tv["s1"]) | set(tv["cand"])))
     logging.info("trainval scored pairs %d in %.0fs", len(tv), time.time() - t0)
     tk = truth_keys(gt)
     tv["y"] = np.fromiter((k in tk for k in zip(tv["s1"], tv["cand"])), bool, len(tv))
     is_val = tv["s1"].isin(val_ids).to_numpy()
+    if a.eval_m2:  # measure a saved stage 2 + its rule on this (e.g. shifted) val, no refit
+        saved = joblib.load(a.eval_m2)
+        m2, feats = saved["m2"], saved["features"]
+        tv["p2"] = m2.predict_proba(tv[feats])[:, 1].astype(np.float32)
+        val_gt = gt[gt["source1_entity_id"].isin(val_ids)].reset_index(drop=True)
+        off = official(val_gt, tv[is_val][select(tv, saved["best"], rows=is_val)])
+        print("saved rule", saved["best"], "on this val:", json.dumps(off))
+        log_run({"experiment_id": "V3" + a.tag, "stage": "eval-m2", "m2": a.eval_m2, "drop_s1": a.drop_s1,
+                 "K": a.K, "rule": saved["best"], "official": off})
+        return
     fit_s1 = np.array(sorted(set(tv.loc[~is_val, "s1"]) - m1_sample))
     fit_s1 = set(np.random.default_rng(7).choice(fit_s1, min(a.s2_n, len(fit_s1)), replace=False))
     fit = tv["s1"].isin(fit_s1).to_numpy()
@@ -436,7 +472,7 @@ def cmd_decide(a):
     print("official evaluator (full frozen val):", json.dumps(off))
     joblib.dump({"m2": m2, "features": feats, "best": best}, V3 / f"m2{a.tag}.joblib")
     log_run({"experiment_id": "V3" + a.tag, "stage": "decide-val", "blocking": "BLK-020", "K": a.K,
-             "best": best, "official": off, "top": res.head(12).to_dict("records"),
+             "drop_s1": a.drop_s1, "best": best, "official": off, "top": res.head(12).to_dict("records"),
              "runtime_s": round(time.time() - t0, 1)})
     if a.test_cands:
         apply_test(a, m2, feats, best, t0)
@@ -546,6 +582,9 @@ def main():
     s.add_argument("--reuse", action="store_true", help="skip val tuning; apply the saved m2<tag> + rule to test")
     s.add_argument("--tag", default="")
     s.add_argument("--out", default=str(config.OUTPUT_DIR / "submissions" / "V3"))
+    s.add_argument("--drop-s1", help="shifted val: file of S1 IDs treated as absent (output/v3/dropped_s1.txt) "
+                                     "to mimic test's denser owner-less distractors")
+    s.add_argument("--eval-m2", help="evaluate this saved m2 + rule on the (shifted) val instead of fitting")
     s = sub.add_parser("variants")
     s.add_argument("--scored", required=True)
     s.add_argument("--m2", required=True, help="m2<tag>.joblib saved by decide")

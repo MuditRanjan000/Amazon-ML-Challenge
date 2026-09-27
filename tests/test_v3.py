@@ -30,3 +30,13 @@ def test_context_and_owner():
 def test_efo_picks_expected_f05_optimum():
     s1, q = np.array(list("aaabbc")), np.array([0.9, 0.6, 0.1, 0.05, 0.02, 0.97])
     assert list(v3.efo_mask(s1, q)) == [True, False, False, False, False, True]  # b: empty beats any pick
+
+
+def test_drop_s1_orphans_records_and_recomputes_best():
+    # record x: best S1 was "a" (dropped) -> "b" becomes best; record y keeps its best S1 "c"
+    df = pd.DataFrame({"s1": list("abcb"), "cand": list("xxyy"), "score": np.float32([0.9, 0.6, 0.8, 0.5]),
+                       "rank": [1, 1, 1, 2], "p": 0.5, "c_is_best": np.float32([1, 0, 1, 0]),
+                       "c_margin": np.float32([0, 0.3, 0, 0.3])})
+    out = v3.drop_s1(df, {"a"})
+    assert list(out["s1"]) == list("bcb")
+    assert list(out["c_is_best"]) == [1, 1, 0] and np.allclose(out["c_margin"], [0, 0, 0.3])
