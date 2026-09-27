@@ -160,3 +160,25 @@
   - Setup: HistGB on 23 vectorized RapidFuzz/number/competition features; trained on 20k train S1 at K=100.
   - Result: ~0.919 macro F0.5 on 20k val S1 (own evaluator, val-only competitors), vs LR-43's 0.855 on full val.
   - Error analysis: the generator perturbs house numbers inside true matches too (4507→380, 1320→1318), and some distractors are near-identical copies of real entities ("Ollanelle Micro" at the same address). Exact number agreement is therefore not decisive.
+
+## [2026-09-27 21:30 IST] Matcher v3 (Aayush + Claude; scope override: "best result, change anything")
+- **Code:**
+  - `src/entity_resolution/v3_match.py`: normalizer + vectorized pair features;
+  - `execution/v3_pipeline.py`: normalize / train / score / decide / variants;
+  - `scripts/aws/v3_fanout.sh` with `v3_score_instance.sh` / `v3_job_instance.sh`: AWS scoring fan-out + single-box jobs;
+  - tests in `tests/test_v3.py`.
+- **Stage 1:** HistGB on about 49 features:
+  - RapidFuzz name/address similarities, number overlap, legal-form conflict, extra/missing name tokens, name-token rarity;
+  - blocking score/rank, record competition stats.
+- **Stage 2:** HistGB on p-context, sibling consensus (the S1's other candidates agreeing on house number/name/address), twin contrast and name ambiguity.
+- **Decision:** one owner per record, then per-S1 expected-F0.5 top-k.
+- **Val (full frozen, official evaluator):**
+  - LR-43 0.8554 → V3_r1 0.9634 → r3 K=200 0.9751 → ensemble r3+r4 K=200 0.9776 → + twin/name features **0.9779** (P .990, R .950, singleton acc .971).
+- **Leaderboard:** 0.889 reported for one early V3 file, so there's a large val→test gap.
+  - Test has 5.75 records/S1 vs 4.68 in train, in every country. Suspected cause: orphan distractors, i.e. records of look-alike entities whose S1 isn't in the test S1 set, so owner/competition signals can't reject them.
+  - Tools for this:
+    - `variants`: per-country logit shifts of p2;
+    - orphan simulation: `candidate_record_stats.py --drop-s1`, `train --exclude-s1`, `decide --drop-s1` (with `--eval-m2` by the eb session);
+    - dropped set `output/v3/dropped_s1.txt` (20% of train+val S1, seed 11).
+- **AWS:** shared team account (PAID, credits-only rule), bucket `amazon-ml-2026-team-655285961749`; runs v3run, v3run2, v3run3, v3run6 there. Every box self-terminates.
+- **Coordination:** several Claude sessions worked on this branch at once, coordinated via SendMessage. Always pull before editing `execution/v3_pipeline.py`.
