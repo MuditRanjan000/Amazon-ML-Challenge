@@ -78,7 +78,14 @@ _s1, is_best_s1, margin_to_best, and owner_gap. The required 10.2M-row train+val
 - Pairwise string distance features + LightGBM matching (Ashank).
 
 # Submission History
-- None yet.
+- **V3_r1**: Leaderboard Macro-F0.5 = 0.889
+- **r4_country_cap**: Leaderboard Macro-F0.5 = 0.952 (Pairs: 5.40M, Singletons: 99,318)
+- **Ayush R4ensX**: Leaderboard Macro-F0.5 = 0.959 (Pairs: 5.86M, Singletons: 99,521)
+- **Ayush Ens3 (`sub_ens3`)**: Leaderboard Macro-F0.5 = 0.965 (Pairs: 5.76M, Singletons: 101,124, Max Cluster: 11)
+- **Candidate 4 (consensus stacking)**: Leaderboard Macro-F0.5 = 0.964 (false positive cluster expansion drag)
+- **Candidate 1 (corroborated cleanup)**: Leaderboard Macro-F0.5 = 0.964659 (pruning subtle matches caused slight recall loss)
+- **FINAL BEST HACKATHON SCORE**: Leaderboard Macro-F0.5 = **0.967** (Peak Leaderboard Result)
+
 
 # Final Pipeline Architecture
 1. Data Loading

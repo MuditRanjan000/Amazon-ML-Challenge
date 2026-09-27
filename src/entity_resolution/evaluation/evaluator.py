@@ -46,7 +46,11 @@ class Evaluator:
         """ground_truth / predictions: columns ['source1_entity_id', 'matched_entity_ids']."""
         e = per_entity_scores(ground_truth, predictions)
         singletons = e["n_true"] == 0
+        tp = int(e["tp"].sum())
+        n_pred = int(e["n_pred"].sum())
+        n_true = int(e["n_true"].sum())
         correct = int((singletons & (e["n_pred"] == 0)).sum())
+        
         return {
             "macro_f05": float(e["f05"].mean()),
             "macro_precision": float(e["precision"].mean()),
@@ -55,4 +59,7 @@ class Evaluator:
             "true_singletons": int(singletons.sum()),
             "correct_singletons": correct,
             "singleton_accuracy": correct / int(singletons.sum()) if singletons.any() else 0.0,
+            "total_tp": tp,
+            "total_fp": n_pred - tp,
+            "total_fn": n_true - tp,
         }
