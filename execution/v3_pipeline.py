@@ -348,6 +348,9 @@ def write_candidate_lists(cands_path, K, out_path):
 
 def cmd_decide(a):
     t0 = time.time()
+    if a.reuse:  # test only, with the stage-2 model + rule already tuned on val
+        saved = joblib.load(V3 / f"m2{a.tag}.joblib")
+        return apply_test(a, saved["m2"], saved["features"], saved["best"], t0)
     gt = DataLoader().load_ground_truth()
     train_ids, val_ids = create_validation_split(gt)
     m1_sample = set(joblib.load(a.m1)["sample"])
@@ -389,8 +392,25 @@ def cmd_decide(a):
     log_run({"experiment_id": "V3" + a.tag, "stage": "decide-val", "blocking": "BLK-020", "K": a.K,
              "best": best, "official": off, "top": res.head(12).to_dict("records"),
              "runtime_s": round(time.time() - t0, 1)})
-    if not a.test_cands:
-        return
+    if a.test_cands:
+        apply_test(a, m2, feats, best, t0)
+
+
+def check_candidate_file(path, s1_ids, matches):
+    seen, problems = set(), 0
+    with open(path, encoding="utf-8") as f:
+        assert f.readline().rstrip("\n") == "source1_entity_id\tcandidate_entity_ids"
+        for line in f:
+            k, v = line.rstrip("\n").split("\t")
+            ids = v.split(",") if v else []
+            problems += (k not in s1_ids) + (k in seen) + (len(set(ids)) != len(ids)) + (not matches.get(k, set()) <= set(ids))
+            seen.add(k)
+    problems += len(s1_ids - seen)
+    logging.info("candidate file check: %d rows, %d problems", len(seen), problems)
+    return problems == 0
+
+
+def apply_test(a, m2, feats, best, t0):
     te = context(read_scored(a.scored, "test"))
     te = siblings(te, norm_keys("test", set(te["s1"]) | set(te["cand"])))
     te["p2"] = m2.predict_proba(te[feats])[:, 1].astype(np.float32)
@@ -402,7 +422,10 @@ def cmd_decide(a):
     n_c = write_candidate_lists(a.test_cands, a.K, out / "candidate_pairs.tsv")
     logging.info("test: %d predicted pairs on %d S1; candidate rows %d; %.0fs", len(tp), tp["s1"].nunique(), n_c,
                  time.time() - t0)
-    ok = SubmissionValidator().validate(match, out / "candidate_pairs.tsv", check_ids=False)
+    # the official validator holds candidate_pairs in memory (173M IDs > laptop RAM): run it on the matches with
+    # --check-ids, and stream-check the candidate file (all S1 once, no duplicates, matches within candidates)
+    ok = SubmissionValidator().validate(match, None, check_ids=True) and check_candidate_file(
+        out / "candidate_pairs.tsv", set(s1_ids), tp.groupby("s1")["cand"].agg(set).to_dict())
     log_run({"experiment_id": "V3" + a.tag, "stage": "decide-test", "K": a.K, "best": best,
              "pred_pairs": len(tp), "validator_pass": ok})
 
@@ -439,6 +462,7 @@ def main():
     s.add_argument("--K", type=int, default=100)
     s.add_argument("--s2-n", type=int, default=400_000, help="train S1 (not in the m1 sample) for stage 2")
     s.add_argument("--m1", default=str(V3 / "m1.joblib"), help="the stage-1 model the scored parts came from")
+    s.add_argument("--reuse", action="store_true", help="skip val tuning; apply the saved m2<tag> + rule to test")
     s.add_argument("--tag", default="")
     s.add_argument("--out", default=str(config.OUTPUT_DIR / "submissions" / "V3"))
     a = ap.parse_args()
