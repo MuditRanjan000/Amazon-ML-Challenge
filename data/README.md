@@ -1,5 +1,5 @@
 # Data Directory
 
-This directory is intended to hold metadata or symbolic links to the raw data.
-The raw data itself (`*.tsv`, `*.csv`) must NOT be committed to the git repository.
-Ensure the `6ab10eb3b23ba_student_resource/` folder is placed at the project root for local development.
+Raw data is never committed (`*.tsv`, `*.csv`, `*.parquet` are gitignored).
+Place the challenge resource at `<repo>/6ab10eb3b23ba_student_resource/`, or set `ER_DATA_DIR` to the folder containing `train/` and `test/`.
+Parsed parquet copies are cached automatically under `output/cache/`. They are rebuilt if a TSV is newer.

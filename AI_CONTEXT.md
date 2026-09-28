@@ -32,8 +32,26 @@ A 20% validation split on `source1_entity_id` is strictly enforced and frozen to
 
 # Active Experiments
 - **EXP-002B**: Optimized Partitioned TF-IDF Blocking.
-    - **Stage 1 (Completed)**: Out-of-core memory-safe pipeline created. Evaluated on 1k queries. D2 (`business_name` + `business_address`, char ngrams 3,5) achieved a remarkable **96.29% Recall@200**.
-    - **Stage 2 (Running)**: Actively running Variant D2 against the entire frozen validation split (35k queries) to generate `validation_candidate_pairs.tsv` and measure full-scale metrics.
+    - **Stage 1 & 2 (Completed)**: Evaluated D2 vs word-unigram on frozen validation.
+    - **BLK-019 fair comparison (same 20k val S1, same harness):**
+      - D2: R@10/50/200 0.902/0.942/0.959, 9.6 S1/s.
+      - word unigram: 0.925/0.963/0.977, 99.8 S1/s.
+      - word + max_df 0.02: 0.920/0.959/0.974, 446 S1/s.
+      - Word@50 beats D2@200.
+    - **Decision (Mudit)**: The D2 comparison is complete (metrics source: BLK-019). The final selected blocker is **word unigram** (name+address, K=200). `char_wb` (D2) has been retired.
+    - **BLK-020 Handoff**: Aayush delivered the final blocker artifacts (`train_candidate_pairs.tsv.gz` and `validation_candidate_pairs.tsv.gz`) and metadata. Redundant AWS generation scripts have been purged, and a verification handoff script (`scripts/verify_blk020_handoff.py`) has been added to the repository. The low-memory streaming verification pipeline confirmed exactly 353,091,200 train pairs and 88,273,000 validation pairs with exactly 0 duplicates. The validation set perfectly matches the 441,365 unique S1 IDs required by the frozen manifest. Handoff to Ashank is complete.
+
+# Blocking — FINAL (BLK-020, 2026-09-26)
+- Frozen blocker: word unigram, name+address, country partition, min_df 2, K=200 (config_sha 657f59868e58, commit 69a91f1).
+- Train: 353,091,200 pairs, R@200 0.97795. Validation: 88,273,000 pairs, R@200 0.9779, ceiling F0.5 0.99213.
+- Files in `s3://amazon-ml-2026-blocking-716522590518/run-69a91f1/final/`; see `artifacts/blocking/blocking_report.md`. Test candidates pending the IDF-on-test ruling.
+
+# Night of 26 Sep (Aayush)
+- Test candidates done (346.5M pairs, France partition OK).
+- RULE-001 baseline: val F0.5 0.7505, submission files validated.
+- Blocking v2 rejected at the gate (best ceiling 0.9959); BLK-020 final.
+- Competition stats for train+val ready.
+- AWS paused: key revoked, new IAM keys needed.
 
 # Experiment Results
 - **EXP-001:** F0.5 = 0.19372. Baseline confirms need for fuzzy matching and blocking.
@@ -42,7 +60,17 @@ A 20% validation split on `source1_entity_id` is strictly enforced and frozen to
 # Current Best Pipeline
 - Exact string matching on normalized business names partitioned by country. (Baseline)
 
-# Known Issues
+## Ashank matcher: BLK-020 full frozen-validation baseline (AWS, 2026-09-27)
+
+- The pair-local 43-feature L2 Logistic model trained on the verified 2,500-S1 / 500,000-pair BLK-020 training preflight was scored over all 88,273,000 frozen-validation candidate pairs (441,365 Source-1 IDs). The pinned AWS runner archive SHA-256 is `7e0d7cf3f0bd93542856d65752f3d3c31d01e8e90fbc8c2cd83d124bbd1438d9`.
+- Official shared-evaluator tuning result: K=200 at probability threshold 0.60, macro F0.5 `0.8554358243`, macro precision `0.9046184359`, macro recall `0.7707768545`, pairwise TP/FP/FN `1,180,659 / 79,972 / 347,884`, and singleton accuracy `0.7714413281` (19,006/24,637). K=100 at the same threshold was `0.8553176338`; this is a tuning comparison, not a final submission threshold.
+- Both complete score files, rank-join report, decision artifacts, threshold sweep, fitted feature artifact, Logistic artifact, and record store are durable in the private challenge S3 bucket. The two temporary c7i.2xlarge workers were confirmed terminated after preservation. No reusable feature/model artifact remains only on EBS.
+- The temporary rank-sidecar SQLite database itself was not synced before termination; its hash and zero-missing/orphan report are durable, and it is deterministically rebuildable from the preserved BLK-020 gzip and pair-ID score files without re-extracting features.
+- Integration work is isolated in `D:\Amazon-ML-Challenge-integration` atop `origin/feature/mudit-submission` `385b36d`; the five reported shared-file conflicts were resolved using Mudit's branch as the base. Package imports now use `entity_resolution.*` and shared `ER_DATA_DIR` configuration.
+- Model v2 is a separate, unfit feature schema. It adds BLK-020 full-pool retrieval statistics without changing the saved 43-feature artifact: locking_score, est_score, second_score, 
+_s1, is_best_s1, margin_to_best, and owner_gap. The required 10.2M-row train+validation statistics parquet, its SHA-256, and matching full train candidate artifact are not present in the checkout or private challenge S3; obtain fresh paths/hashes from Aayush/Mudit before fitting v2.
+- The Model V2 Diagnostic was an internal training diagnostic on a row-split of the 500k training candidate sample. The reported macro F0.5 of 0.899 has significant entity leakage and is NOT a frozen-validation result. It cannot be used to establish that v2 beats the official 0.8554 baseline.
+
 - Baseline misses all typo, transliteration, and abbreviation variations, resulting in extremely poor recall.
 
 # Future Experiments
@@ -50,7 +78,14 @@ A 20% validation split on `source1_entity_id` is strictly enforced and frozen to
 - Pairwise string distance features + LightGBM matching (Ashank).
 
 # Submission History
-- None yet.
+- **V3_r1**: Leaderboard Macro-F0.5 = 0.889
+- **r4_country_cap**: Leaderboard Macro-F0.5 = 0.952 (Pairs: 5.40M, Singletons: 99,318)
+- **Ayush R4ensX**: Leaderboard Macro-F0.5 = 0.959 (Pairs: 5.86M, Singletons: 99,521)
+- **Ayush Ens3 (`sub_ens3`)**: Leaderboard Macro-F0.5 = 0.965 (Pairs: 5.76M, Singletons: 101,124, Max Cluster: 11)
+- **Candidate 4 (consensus stacking)**: Leaderboard Macro-F0.5 = 0.964 (false positive cluster expansion drag)
+- **Candidate 1 (corroborated cleanup)**: Leaderboard Macro-F0.5 = 0.964659 (pruning subtle matches caused slight recall loss)
+- **FINAL BEST HACKATHON SCORE**: Leaderboard Macro-F0.5 = **0.967** (Peak Leaderboard Result)
+
 
 # Final Pipeline Architecture
 1. Data Loading
@@ -64,3 +99,7 @@ A 20% validation split on `source1_entity_id` is strictly enforced and frozen to
 # Important Decisions
 - Team Playbook adopted as the core execution strategy.
 - Repositiory migrated to a strict, modular framework under `src/entity_resolution`.
+- AGENTS.md rule 5 (push to main + tradebot redeploy) replaced with branch + PR policy; CLAUDE.md/GEMINI.md mirror AGENTS.md via `execution/sync_agent_docs.py` (PR from `feature/aayush-agent-docs`).
+- Blocking contract + oracle-ceiling F0.5 metric + hand-off gates proposed in `directives/blocking.md` (pending Ashank/Mudit sign-off).
+- 2026-09-25 pipeline refactor (`feature/aayush-pipeline-refactor`): installable package, pinned deps, env-driven config, raw-text parquet loader, Unicode-safe normalizer (fixes the Devanagari shredding bug), sparse top-k TF-IDF (no OOM on 15.6 GB), vectorized evaluators, official-validator wrapper, JSONL experiment log, 25 tests.
+- **Current best blocking (BLK-011, 20k val):** word-unigram TF-IDF on name+address, forward top-K, `max_df` 0.02: R@10 0.912 / R@50 0.956 / R@200 0.972; ceiling F0.5 ≥ 0.96 in every bucket. The next experiments are reverse + union and a full-val run to freeze K / max_df.
